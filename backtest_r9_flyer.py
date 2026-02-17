@@ -12,11 +12,14 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
-from utils_fuso import converter_para_brt, dentro_horario_operacao, N_COTAS, MULT_PONTOS_REAIS, CUSTO_REAIS
+from market_time import converter_para_brt, dentro_horario_operacao
+from b3_costs_phase2 import TradePoints, default_b3_cost_model, trade_costs_brl, trade_net_pnl_brl
 
 # --- Configuration ---
 INITIAL_CAPITAL = 10000.0
 CDI_ANNUAL = 0.12 # 12% a.a.
+DEFAULT_QUANTITY = 1
+_COST_MODEL = default_b3_cost_model()
 
 DEFAULT_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fase1_antigravity", "WIN_5min.csv")
 
@@ -86,8 +89,9 @@ def run_detailed_backtest(
                 pts = exit_price - entry_price
             elif position == -1:
                 pts = entry_price - exit_price
-                
-            trade_res_brl = (pts * N_COTAS * MULT_PONTOS_REAIS) - CUSTO_REAIS
+
+            trade = TradePoints(entry_price_points=float(entry_price), exit_price_points=float(exit_price), quantity=DEFAULT_QUANTITY)
+            trade_res_brl = trade_net_pnl_brl(trade, _COST_MODEL)
             trades.append({
                 'entry_time': entry_ts,
                 'exit_time': ts,
@@ -95,7 +99,8 @@ def run_detailed_backtest(
                 'exit_price': exit_price,
                 'position': position,
                 'points': pts,
-                'pnl_brl': trade_res_brl
+                'pnl_brl': trade_res_brl,
+                'costs_brl': trade_costs_brl(trade, _COST_MODEL),
             })
             current_capital += trade_res_brl
             position = 0
@@ -171,7 +176,8 @@ def run_detailed_backtest(
             
             if exit_signal:
                 pts = exit_price_exec - entry_price
-                trade_res_brl = (pts * N_COTAS * MULT_PONTOS_REAIS) - CUSTO_REAIS
+                trade = TradePoints(entry_price_points=float(entry_price), exit_price_points=float(exit_price_exec), quantity=DEFAULT_QUANTITY)
+                trade_res_brl = trade_net_pnl_brl(trade, _COST_MODEL)
                 trades.append({
                     'entry_time': entry_ts,
                     'exit_time': ts,
@@ -179,7 +185,8 @@ def run_detailed_backtest(
                     'exit_price': exit_price_exec,
                     'position': 1,
                     'points': pts,
-                    'pnl_brl': trade_res_brl
+                    'pnl_brl': trade_res_brl,
+                    'costs_brl': trade_costs_brl(trade, _COST_MODEL),
                 })
                 current_capital += trade_res_brl
                 position = 0

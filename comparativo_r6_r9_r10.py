@@ -6,10 +6,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from roboMamhedgeR6 import run_backtest as run_r6
-from roboMamhedgeR9 import run_backtest as run_r9
-from roboMamhedgeR10 import run_backtest as run_r10
-from utils_fuso import pnl_reais
+from roboMamhedgeR6 import run_backtest_trades as run_r6_trades
+from roboMamhedgeR9 import run_backtest_trades as run_r9_trades
+from roboMamhedgeR10 import run_backtest_trades as run_r10_trades
+from b3_costs_phase2 import default_b3_cost_model, trade_net_pnl_brl
 
 CAPITAL_INICIAL = 10_000.0
 CDI_ANUAL = 0.1175  # ajuste conforme cenário desejado
@@ -33,8 +33,7 @@ def _period_business_days(csv_path: str = DEFAULT_CSV_PATH) -> int:
     return max(len(bdays), 1)
 
 
-def _metrics(trades_pts: np.ndarray, capital: float, cdi_anual: float, bdays: int) -> dict:
-    trades_r = np.array([pnl_reais(t) for t in trades_pts], dtype=float)
+def _metrics(trades_r: np.ndarray, capital: float, cdi_anual: float, bdays: int) -> dict:
     if len(trades_r) == 0:
         return {
             "n_trades": 0,
@@ -109,17 +108,19 @@ def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> 
 def run_comparison() -> pd.DataFrame:
     bdays = _period_business_days(DEFAULT_CSV_PATH)
 
+    cost_model = default_b3_cost_model()
     runs = {
-        "R6": run_r6(),
-        "R9": run_r9(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True),
-        "R10": run_r10(ema_fast=6, ema_slow=21, rsi_thresh=40, rsi_window=4, stop_atr=1.7, trail_atr=2.4, breakeven_trigger_atr=1.5, use_macd=True, use_adx=True),
+        "R6": run_r6_trades(),
+        "R9": run_r9_trades(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True),
+        "R10": run_r10_trades(ema_fast=6, ema_slow=21, rsi_thresh=40, rsi_window=4, stop_atr=1.7, trail_atr=2.4, breakeven_trigger_atr=1.5, use_macd=True, use_adx=True),
     }
 
     rows = []
     mc_data: dict[str, np.ndarray] = {}
 
-    for name, trades_pts in runs.items():
-        m = _metrics(np.array(trades_pts), CAPITAL_INICIAL, CDI_ANUAL, bdays)
+    for name, trades in runs.items():
+        trades_r = np.array([trade_net_pnl_brl(t, cost_model) for t in trades], dtype=float)
+        m = _metrics(trades_r, CAPITAL_INICIAL, CDI_ANUAL, bdays)
         mc = _monte_carlo_returns_pct(m["trades_r"], CAPITAL_INICIAL, MC_SIMS, SEED)
         mc_data[name] = mc
         rows.append({

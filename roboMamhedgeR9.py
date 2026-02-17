@@ -8,11 +8,15 @@ from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator, MACD, ADXIndicator
 from ta.volatility import AverageTrueRange
 
-from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N_COTAS
+from market_time import converter_para_brt, dentro_horario_operacao
+from b3_costs_phase2 import TradePoints, default_b3_cost_model, trade_net_pnl_brl
+
+DEFAULT_QUANTITY = 1
 
 
-def run_backtest(
+def run_backtest_trades(
     csv_path="fase1_antigravity/WIN_5min.csv",
+    quantity: int = DEFAULT_QUANTITY,
     ema_fast=4,
     rsi_period=14,
     rsi_thresh=40,
@@ -25,6 +29,7 @@ def run_backtest(
     min_atr=1e-9,
     max_bars_in_trade=48,
 ):
+    """Retorna trades com entry/exit (pontos) para cálculo de custos realistas."""
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -51,7 +56,7 @@ def run_backtest(
     take_profit = 0.0
     bars_in_trade = 0
     entry_day = None
-    trades = []
+    trades: list[TradePoints] = []
 
     for i in range(2, len(df)):
         ts = df.index[i]
@@ -62,25 +67,29 @@ def run_backtest(
 
             # Session Exit
             if ts.date() != entry_day or not dentro_horario_operacao(ts):
-                trades.append(df['close'].iloc[i] - entry_price)
+                exit_price = float(df['close'].iloc[i])
+                trades.append(TradePoints(float(entry_price), exit_price, quantity))
                 position = 0
                 continue
 
             # Stop first
             if df['low'].iloc[i] <= stop_loss:
-                trades.append(stop_loss - entry_price)
+                exit_price = float(stop_loss)
+                trades.append(TradePoints(float(entry_price), exit_price, quantity))
                 position = 0
                 continue
 
             # Target second
             if take_profit > 0 and df['high'].iloc[i] >= take_profit:
-                trades.append(take_profit - entry_price)
+                exit_price = float(take_profit)
+                trades.append(TradePoints(float(entry_price), exit_price, quantity))
                 position = 0
                 continue
 
             # RSI peak or time stop
             if bool(df['rsi_peak_max'].iloc[i]) or bars_in_trade >= max_bars_in_trade:
-                trades.append(df['close'].iloc[i] - entry_price)
+                exit_price = float(df['close'].iloc[i])
+                trades.append(TradePoints(float(entry_price), exit_price, quantity))
                 position = 0
                 continue
 
@@ -108,26 +117,62 @@ def run_backtest(
                     continue
 
             # ENTRY
-            entry_price = df['close'].iloc[i]
-            stop_loss = entry_price - stop_atr * atr_val
-            take_profit = entry_price + target_atr * atr_val if target_atr > 0 else 0.0
+            entry_price = float(df['close'].iloc[i])
+            stop_loss = float(entry_price - stop_atr * atr_val)
+            take_profit = float(entry_price + target_atr * atr_val) if target_atr > 0 else 0.0
             bars_in_trade = 0
             entry_day = ts.date()
             position = 1
 
     if position == 1:
-        trades.append(df['close'].iloc[-1] - entry_price)
+        exit_price = float(df['close'].iloc[-1])
+        trades.append(TradePoints(float(entry_price), exit_price, quantity))
 
-    return np.array(trades) if trades else np.array([])
+    return trades
+
+
+def run_backtest(
+    csv_path="fase1_antigravity/WIN_5min.csv",
+    ema_fast=4,
+    rsi_period=14,
+    rsi_thresh=40,
+    rsi_window=5,
+    stop_atr=2.0,
+    target_atr=0,
+    use_macd=True,
+    use_adx=True,
+    adx_min=20,
+    min_atr=1e-9,
+    max_bars_in_trade=48,
+):
+    # Mantém compatibilidade: retorna P&L em pontos (sem custos).
+    trades = run_backtest_trades(
+        csv_path=csv_path,
+        quantity=DEFAULT_QUANTITY,
+        ema_fast=ema_fast,
+        rsi_period=rsi_period,
+        rsi_thresh=rsi_thresh,
+        rsi_window=rsi_window,
+        stop_atr=stop_atr,
+        target_atr=target_atr,
+        use_macd=use_macd,
+        use_adx=use_adx,
+        adx_min=adx_min,
+        min_atr=min_atr,
+        max_bars_in_trade=max_bars_in_trade,
+    )
+    pnl_pts = np.array([(t.exit_price_points - t.entry_price_points) * t.quantity for t in trades], dtype=float)
+    return pnl_pts if len(pnl_pts) else np.array([])
 
 
 if __name__ == "__main__":
-    trades = run_backtest()
+    trades = run_backtest_trades(quantity=DEFAULT_QUANTITY)
     if len(trades) > 0:
-        tr = np.array([pnl_reais(t) for t in trades])
-        wr = (tr > 0).mean() * 100
+        cost_model = default_b3_cost_model()
+        tr = np.array([trade_net_pnl_brl(t, cost_model) for t in trades], dtype=float)
+        wr = float((tr > 0).mean() * 100)
         print(
-            f"[R9 Pro] Trades: {len(tr)} ({N_COTAS} contratos) | "
+            f"[R9 Pro] Trades: {len(tr)} ({DEFAULT_QUANTITY} contratos) | "
             f"Win: {wr:.1f}% | E[P&L]: R$ {tr.mean():.2f}/trade | Total: R$ {tr.sum():.2f}"
         )
     else:

@@ -99,7 +99,8 @@ roboMamhedgeM1.0/
 ├── backtest_framework/         # Fase 2: framework profissional (Codex)
 ├── tests/                      # Fase 2: testes automatizados
 ├── run_backtest_framework.py   # Exemplo de uso do framework
-├── utils_fuso.py               # BRT, horários, pnl_reais(), N_COTAS, CUSTO (WIN)
+├── market_time.py              # Fase 2: BRT/horário de operação
+├── b3_costs_phase2.py          # Fase 2: custos realistas B3 (taxas/emolumentos/ISS)
 ├── roboMamhedgeR6.py           # Robô revisado (fase 2)
 ├── roboMamhedgeR9.py           # Robô revisado (fase 2)
 ├── roboMamhedgeR10.py          # Robô revisado (fase 2)
@@ -112,6 +113,7 @@ roboMamhedgeM1.0/
 │   ├── montecarlo_comparativo.png  # Saída (legado)
 │   ├── flyer_r9.png            # Saída (legado)
 │   ├── *.py                    # Robôs e utilitários da fase 1
+│   ├── utils_fuso.py            # Fase 1: custos simplificados + BRT/horário
 │   └── claude/                 # Materiais/diagnósticos do Claude (legado)
 │
 ├── RESUMO.md                   # Este arquivo

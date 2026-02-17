@@ -14,15 +14,20 @@ from config import (
     BB_PERIOD, BB_STD, BB_USE, BB_ENTRY,
     ATR_PERIOD, STOP_ATR_MULT,
 )
-from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N_COTAS
+from market_time import converter_para_brt, dentro_horario_operacao
+from b3_costs_phase2 import TradePoints, default_b3_cost_model, trade_net_pnl_brl
+
+DEFAULT_QUANTITY = 1
 
 
-def run_backtest(
+def run_backtest_trades(
     csv_path="fase1_antigravity/WIN_5min.csv",
     stop_atr=STOP_ATR_MULT,
     min_atr=1e-9,
     use_macd_filter=True,
+    quantity: int = DEFAULT_QUANTITY,
 ):
+    """Retorna lista de trades com entry/exit (em pontos) para custos realistas."""
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -45,9 +50,10 @@ def run_backtest(
 
     position = 0
     entry_price = 0.0
+    entry_ts = None
     stop_loss = 0.0
     entry_day = None
-    trades = []
+    trades: list[TradePoints] = []
 
     for i in range(2, len(df)):
         ts = df.index[i]
@@ -55,19 +61,22 @@ def run_backtest(
         if position == 1:
             # Fechamento por troca de dia ou fora da sessão
             if ts.date() != entry_day or not dentro_horario_operacao(ts):
-                trades.append(df['close'].iloc[i] - entry_price)
+                exit_price = float(df['close'].iloc[i])
+                trades.append(TradePoints(entry_price_points=float(entry_price), exit_price_points=exit_price, quantity=quantity))
                 position = 0
                 continue
 
             # Check Stop Loss
             if df['low'].iloc[i] <= stop_loss:
-                trades.append(stop_loss - entry_price)
+                exit_price = float(stop_loss)
+                trades.append(TradePoints(entry_price_points=float(entry_price), exit_price_points=exit_price, quantity=quantity))
                 position = 0
                 continue
 
             # RSI Peak Exit
             if bool(df['rsi_peak_max'].iloc[i]):
-                trades.append(df['close'].iloc[i] - entry_price)
+                exit_price = float(df['close'].iloc[i])
+                trades.append(TradePoints(entry_price_points=float(entry_price), exit_price_points=exit_price, quantity=quantity))
                 position = 0
                 continue
 
@@ -95,26 +104,47 @@ def run_backtest(
             macd_ok = (not use_macd_filter) or pd.isna(macd_val) or macd_val > 0
 
             if bool(rsi_win) and ema4_up and macd_ok and bb_ok:
-                entry_price = close_val
-                stop_loss = entry_price - stop_atr * atr_val
+                entry_price = float(close_val)
+                entry_ts = ts
+                stop_loss = float(entry_price - stop_atr * atr_val)
                 entry_day = ts.date()
                 position = 1
 
     if position == 1:
-        trades.append(df['close'].iloc[-1] - entry_price)
+        exit_price = float(df['close'].iloc[-1])
+        trades.append(TradePoints(entry_price_points=float(entry_price), exit_price_points=exit_price, quantity=quantity))
 
-    return np.array(trades) if trades else np.array([])
+    return trades
+
+
+def run_backtest(
+    csv_path="fase1_antigravity/WIN_5min.csv",
+    stop_atr=STOP_ATR_MULT,
+    min_atr=1e-9,
+    use_macd_filter=True,
+):
+    # Mantém compatibilidade: retorna P&L em pontos (sem custos).
+    trades = run_backtest_trades(
+        csv_path=csv_path,
+        stop_atr=stop_atr,
+        min_atr=min_atr,
+        use_macd_filter=use_macd_filter,
+        quantity=DEFAULT_QUANTITY,
+    )
+    pnl_pts = np.array([(t.exit_price_points - t.entry_price_points) * t.quantity for t in trades], dtype=float)
+    return pnl_pts if len(pnl_pts) else np.array([])
 
 
 if __name__ == "__main__":
-    trades = run_backtest()
+    trades = run_backtest_trades(quantity=DEFAULT_QUANTITY)
     if len(trades) == 0:
         print("[R6 Pro] Nenhum trade executado.")
     else:
-        trades_r = np.array([pnl_reais(t) for t in trades])
-        win_rate = (trades_r > 0).sum() / len(trades_r)
+        cost_model = default_b3_cost_model()
+        trades_r = np.array([trade_net_pnl_brl(t, cost_model) for t in trades], dtype=float)
+        win_rate = float((trades_r > 0).mean())
         print(
-            f"[R6 Pro] Trades: {len(trades_r)} ({N_COTAS} contratos) | "
+            f"[R6 Pro] Trades: {len(trades_r)} ({DEFAULT_QUANTITY} contratos) | "
             f"Win: {win_rate*100:.1f}% | E[P&L]: R$ {trades_r.mean():.2f}/trade | "
             f"Total: R$ {trades_r.sum():.2f}"
         )

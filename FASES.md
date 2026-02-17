@@ -18,7 +18,8 @@ Implementação profissional do framework de backtest e testes automatizados, al
 - Framework: `backtest_framework/`
 - Testes: `tests/`
 - Robôs revisados: `roboMamhedgeR6.py`, `roboMamhedgeR9.py`, `roboMamhedgeR10.py`
-- Utilitário (escala WIN e horário): `utils_fuso.py`
+- Tempo/sessão (BRT): `market_time.py`
+- Custos B3 realistas (taxas/emolumentos/ISS + corretagem): `b3_costs_phase2.py`
 
 ### Execução rápida
 

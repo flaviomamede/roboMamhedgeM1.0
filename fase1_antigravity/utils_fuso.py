@@ -19,6 +19,11 @@ N_COTAS = 1
 # Custo fixo por round-trip em R$ (corretagem + emolumentos + slippage)
 CUSTO_REAIS = 2.50
 
+# Compatibilidade (legado):
+# alguns scripts antigos subtraem custo diretamente em "pontos".
+# Convertemos o custo em R$ para pontos usando a escala atual.
+CUSTO_POR_TRADE = CUSTO_REAIS / (N_COTAS * MULT_PONTOS_REAIS)
+
 
 def pnl_reais(pnl_pontos):
     """Converte P&L de pontos para R$ (já com custo)."""
@@ -46,8 +51,8 @@ def dentro_horario_operacao(ts):
         return False
     if h == 10 and m < 45:
         return False
-    if h == 11:
-        return False
+#    if h == 11:
+#        return False
     if h == 16 and m >= 30:
         return False
     return True
