@@ -1,11 +1,6 @@
 """
-R6 (revisado): EMA4 + RSI Window + MACD (+ BB opcional) + Stop ATR.
-
-Melhorias práticas (sem otimização):
-- Remove ramos de short não usados (robô é long-only).
-- Fecha posição no fim do dia e em troca de data (evita carregar overnight sem querer).
-- Ignora entrada quando ATR está inválido/baixo demais (evita stop irrealista).
-- Mantém lógica conservadora de execução: stop tem prioridade sobre saída por peak.
+R6 (Professional): EMA4 + RSI Window + MACD (+ BB opcional) + Stop ATR.
+ALINHADO 1:1 COM PADRÃO PROFISSIONAL (WIN 0.20).
 """
 import pandas as pd
 import numpy as np
@@ -56,7 +51,6 @@ def run_backtest(
 
     for i in range(2, len(df)):
         ts = df.index[i]
-        prev_ts = df.index[i - 1]
 
         if position == 1:
             # Fechamento por troca de dia ou fora da sessão
@@ -65,12 +59,13 @@ def run_backtest(
                 position = 0
                 continue
 
-            hit_stop = df['low'].iloc[i] <= stop_loss
-            if hit_stop:
+            # Check Stop Loss
+            if df['low'].iloc[i] <= stop_loss:
                 trades.append(stop_loss - entry_price)
                 position = 0
                 continue
 
+            # RSI Peak Exit
             if bool(df['rsi_peak_max'].iloc[i]):
                 trades.append(df['close'].iloc[i] - entry_price)
                 position = 0
@@ -114,12 +109,12 @@ def run_backtest(
 if __name__ == "__main__":
     trades = run_backtest()
     if len(trades) == 0:
-        print("[R6 revisado] Nenhum trade executado.")
+        print("[R6 Pro] Nenhum trade executado.")
     else:
         trades_r = np.array([pnl_reais(t) for t in trades])
         win_rate = (trades_r > 0).sum() / len(trades_r)
         print(
-            f"[R6 revisado] Trades: {len(trades_r)} ({N_COTAS} cotas) | "
+            f"[R6 Pro] Trades: {len(trades_r)} ({N_COTAS} contratos) | "
             f"Win: {win_rate*100:.1f}% | E[P&L]: R$ {trades_r.mean():.2f}/trade | "
             f"Total: R$ {trades_r.sum():.2f}"
         )
