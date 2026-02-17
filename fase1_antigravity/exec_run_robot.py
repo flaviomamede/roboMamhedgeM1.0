@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-from benchmark_pwb import metrics as metrics_phase1
+from utils_metrics_pwb import metrics_from_csv
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -64,12 +64,15 @@ def main() -> None:
     trades_pts = run_backtest(args.csv)
     trades_pts = np.array(trades_pts) if trades_pts is not None else np.array([])
 
-    m = metrics_phase1(trades_pts)
+    m = metrics_from_csv(trades_pts, args.csv)
     print("=" * 70)
     print(f"FASE 1 — ROBÔ {args.robot.upper()} — {Path(args.csv).name}")
     print("=" * 70)
     print(f"Trades: {m['n']} | Win: {m['win_rate']*100:.1f}% | E[P&L]: R$ {m['e_pl']:.2f}/trade | Total: R$ {m['total_pl']:.2f}")
-    print(f"Sharpe: {m['sharpe']:.2f} | Max DD: R$ {m['max_dd']:.2f}")
+    print(
+        f"Sharpe: {m['sharpe']:.2f} | Max DD: R$ {m['max_dd']:.2f} | "
+        f"Payoff: {m['payoff']:.2f} | RiskFactor: {m['risk_factor']:.2f} | ROI mensal: {m['roi_mensal_pct']:.2f}%"
+    )
 
 
 if __name__ == "__main__":

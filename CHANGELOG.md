@@ -128,7 +128,7 @@ Script para analisar desempenho por horário. Revelou que **60% do prejuízo** v
 - Entrada: EMA9>EMA21, close>EMA200, momentum>0 (R2)
 - Saída: pico RSI ou stop 2×ATR (R6)
 
-### benchmark_pwb.py / run_benchmark_completo.py
+### utils_metrics_pwb.py / run_benchmark_completo.py
 
 - **Walk-forward** 70/30 (train/test) — metodologia Papers With Backtest
 - Métricas: win rate, E[P&L], Sharpe, max drawdown

@@ -3,9 +3,16 @@ Executa benchmark completo estilo pwb + otimização.
 Meta: >55% win rate, 11k em 60 dias (10k inicial + 1k lucro).
 """
 import numpy as np
-from benchmark_pwb import run_benchmark, metrics, print_benchmark
-from roboMamhedgeR6 import run_backtest as run_r6
-from roboMamhedgeR7 import run_backtest as run_r7, optimize_params
+import sys
+from pathlib import Path
+
+# utilitários da Fase 1
+FASE1_DIR = Path(__file__).resolve().parent / "fase1_antigravity"
+sys.path.insert(0, str(FASE1_DIR))
+
+from utils_metrics_pwb import run_benchmark, metrics, print_benchmark  # noqa: E402
+from roboMamhedgeR6 import run_backtest as run_r6  # noqa: E402
+from roboMamhedgeR7 import run_backtest as run_r7, optimize_params  # noqa: E402
 
 CAPITAL = 10000
 META_LUCRO = 1000

@@ -137,7 +137,7 @@ python roboMamhedgeR6.py   # R6, R1, R2...
 python run_all_montecarlo.py
 
 # 4. Benchmark walk-forward
-python fase1_antigravity/benchmark_pwb.py
+python fase1_antigravity/exec_optimize_robot.py --robot R7
 ```
 
 ---

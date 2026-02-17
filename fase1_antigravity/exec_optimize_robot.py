@@ -21,23 +21,71 @@ TEST_CSV = BASE_DIR / "WIN_test.csv"
 from utils_fuso import pnl_reais
 
 
-def metrics_phase1(trades_pts):
-    """Métricas padronizadas. trades_pts = P&L em pontos puros."""
-    if trades_pts is None or len(trades_pts) == 0:
-        return {"n": 0, "win_rate": 0, "e_pl": 0, "total_pl": 0, "sharpe": 0, "max_dd": 0}
-    trades_r = np.array([pnl_reais(t) for t in trades_pts], dtype=float)
+def metrics_phase1_from_csv(trades_pts, csv_path: str | Path, capital_inicial: float = 10_000.0) -> dict:
+    """Métricas padronizadas (em R$) + ROI mensal baseado no período do CSV."""
+    if trades_pts is None:
+        iterable = []
+    else:
+        iterable = np.asarray(trades_pts).tolist()
+    trades_r = np.array([pnl_reais(t) for t in iterable], dtype=float)
+    if len(trades_r) == 0:
+        return {
+            "n": 0,
+            "win_rate": 0.0,
+            "e_pl": 0.0,
+            "total_pl": 0.0,
+            "sharpe": 0.0,
+            "max_dd": 0.0,
+            "payoff": 0.0,
+            "risk_factor": float("inf"),
+            "roi_total_pct": 0.0,
+            "roi_mensal_pct": 0.0,
+        }
+
     wins = trades_r[trades_r > 0]
+    losses = trades_r[trades_r < 0]
     n = len(trades_r)
-    wr = len(wins) / n if n > 0 else 0
+    win_rate = float((trades_r > 0).mean())
     e_pl = float(trades_r.mean())
     total = float(trades_r.sum())
+
     std = float(trades_r.std(ddof=1)) if n > 1 else 0.0
-    sharpe = (e_pl / std * np.sqrt(252)) if std > 0 else 0.0
+    sharpe = float((e_pl / std * np.sqrt(252)) if std > 0 else 0.0)
+
     cum = np.cumsum(trades_r)
     peak = np.maximum.accumulate(cum)
     dd = peak - cum
     max_dd = float(dd.max()) if len(dd) > 0 else 0.0
-    return {"n": int(n), "win_rate": float(wr), "e_pl": e_pl, "total_pl": total, "sharpe": float(sharpe), "max_dd": max_dd}
+
+    avg_win = float(wins.mean()) if len(wins) else 0.0
+    avg_loss = float(losses.mean()) if len(losses) else 0.0
+    payoff = float(avg_win / abs(avg_loss)) if avg_win > 0 and avg_loss < 0 else 0.0
+
+    risk_factor = float(max_dd / abs(total)) if abs(total) > 1e-12 else float("inf")
+
+    try:
+        df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+        idx = pd.to_datetime(df.index)
+        days = (idx.max() - idx.min()).days if len(idx) else 0
+    except Exception:
+        days = 0
+
+    roi_total = (total / capital_inicial) if capital_inicial else 0.0
+    roi_total_pct = roi_total * 100.0
+    roi_mensal_pct = (roi_total * (30.0 / days) * 100.0) if days and days > 0 else 0.0
+
+    return {
+        "n": int(n),
+        "win_rate": win_rate,
+        "e_pl": e_pl,
+        "total_pl": total,
+        "sharpe": sharpe,
+        "max_dd": max_dd,
+        "payoff": payoff,
+        "risk_factor": risk_factor,
+        "roi_total_pct": float(roi_total_pct),
+        "roi_mensal_pct": float(roi_mensal_pct),
+    }
 
 
 def _ensure_train_test(csv_path: Path, train_pct: float = 0.7) -> tuple[Path, Path]:
@@ -69,7 +117,7 @@ def _evaluate_r7(csv_path: str, best) -> dict:
     stop, target, rsi, use_macd = best[0], best[1], best[2], best[3]
     trades_pts = run_backtest(csv_path, stop_atr=stop, target_atr=target, rsi_bullish=rsi, use_macd_filter=use_macd)
     trades_pts = np.array(trades_pts) if trades_pts is not None else np.array([])
-    return metrics_phase1(trades_pts)
+    return metrics_phase1_from_csv(trades_pts, csv_path)
 
 
 def main() -> None:

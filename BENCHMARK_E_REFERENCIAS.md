@@ -111,7 +111,7 @@ pwb-backtrader       → Engine de backtest
 
 ## 6. Implementação no roboMT5
 
-- **benchmark_pwb.py** — Walk-forward (70% train / 30% test), métricas padronizadas
+- **utils_metrics_pwb.py** — Walk-forward (70% train / 30% test), métricas padronizadas (Payoff, RiskFactor, ROI mensal)
 - **roboMamhedgeR7.py** — R6 + Take Profit + otimização de parâmetros
 - **roboMamhedgeR8.py** — Híbrido R2 (EMA200, momentum) + R6 (saída por pico)
 - **run_benchmark_completo.py** — Executa benchmark + otimização + projeção 60 dias

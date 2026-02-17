@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-from benchmark_pwb import metrics as metrics_phase1
+from utils_metrics_pwb import metrics_from_csv
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -55,7 +55,7 @@ def _run_all(csv_path: str) -> list[tuple[str, dict]]:
     for name, fn in robots:
         trades = fn(csv_path)
         trades = np.array(trades) if trades is not None else np.array([])
-        out.append((name, metrics_phase1(trades)))
+        out.append((name, metrics_from_csv(trades, csv_path)))
     return out
 
 
@@ -71,11 +71,15 @@ def main() -> None:
     print("=" * 100)
     print(f"FASE 1 — COMPARATIVO — {Path(args.csv).name}")
     print("=" * 100)
-    print(f"{'Robô':<10} | {'Trades':>6} | {'Win%':>6} | {'E[P&L] R$':>10} | {'Total R$':>10} | {'Sharpe':>7} | {'MaxDD R$':>9}")
+    print(
+        f"{'Robô':<10} | {'Trades':>6} | {'Win%':>6} | {'E[P&L] R$':>10} | {'Total R$':>10} | "
+        f"{'Payoff':>6} | {'RiskF':>6} | {'ROI/m':>7} | {'Sharpe':>7} | {'MaxDD R$':>9}"
+    )
     print("-" * 100)
     for name, m in rows:
         print(
-            f"{name:<10} | {m['n']:>6} | {m['win_rate']*100:>5.1f}% | {m['e_pl']:>10.2f} | {m['total_pl']:>10.2f} | {m['sharpe']:>7.2f} | {m['max_dd']:>9.2f}"
+            f"{name:<10} | {m['n']:>6} | {m['win_rate']*100:>5.1f}% | {m['e_pl']:>10.2f} | {m['total_pl']:>10.2f} | "
+            f"{m['payoff']:>6.2f} | {m['risk_factor']:>6.2f} | {m['roi_mensal_pct']:>6.2f}% | {m['sharpe']:>7.2f} | {m['max_dd']:>9.2f}"
         )
 
 
