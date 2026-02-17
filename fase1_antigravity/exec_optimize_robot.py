@@ -120,31 +120,118 @@ def _evaluate_r7(csv_path: str, best) -> dict:
     return metrics_phase1_from_csv(trades_pts, csv_path)
 
 
+def _optimize_r0(train_csv: str):
+    from roboMamhedgeR0 import optimize_params
+
+    best = optimize_params(train_csv)
+    if best is None:
+        raise SystemExit("Otimização R0 não encontrou resultados (poucos trades?).")
+    return best
+
+
+def _evaluate_r0(csv_path: str, best) -> dict:
+    from roboMamhedgeR0 import run_backtest
+
+    ema_fast, ema_slow, atr_period, atr_mean_period = best[0], best[1], best[2], best[3]
+    trades_pts = run_backtest(
+        csv_path=csv_path,
+        ema_fast=int(ema_fast),
+        ema_slow=int(ema_slow),
+        atr_period=int(atr_period),
+        atr_mean_period=int(atr_mean_period),
+    )
+    return metrics_phase1_from_csv(trades_pts, csv_path)
+
+
+def _optimize_r6(train_csv: str):
+    # Fase 1: R6 = R6_v2
+    from roboMamhedgeR6_v2 import optimize_params
+
+    best = optimize_params(train_csv)
+    if best is None:
+        raise SystemExit("Otimização R6 (R6_v2) não encontrou resultados (poucos trades?).")
+    return best
+
+
+def _evaluate_r6(csv_path: str, best) -> dict:
+    from roboMamhedgeR6_v2 import run_backtest
+
+    stop, target, rsi, win, use_macd = best[0], best[1], best[2], best[3], best[4]
+    trades_pts = run_backtest(
+        csv_path=csv_path,
+        stop_atr=float(stop),
+        target_atr=float(target),
+        rsi_thresh=float(rsi),
+        rsi_window=int(win),
+        use_macd_filter=bool(use_macd),
+    )
+    return metrics_phase1_from_csv(trades_pts, csv_path)
+
+
+def _optimize_r8(train_csv: str):
+    from roboMamhedgeR8 import optimize_params
+
+    best = optimize_params(train_csv)
+    if best is None:
+        raise SystemExit("Otimização R8 não encontrou resultados (poucos trades?).")
+    return best
+
+
+def _evaluate_r8(csv_path: str, best) -> dict:
+    from roboMamhedgeR8 import run_backtest
+
+    ema_fast, ema_slow, ema_trend, mom, stop = best[0], best[1], best[2], best[3], best[4]
+    trades_pts = run_backtest(
+        csv_path=csv_path,
+        ema_fast=int(ema_fast),
+        ema_slow=int(ema_slow),
+        ema_trend=int(ema_trend),
+        momentum_lookback=int(mom),
+        stop_atr=float(stop),
+    )
+    return metrics_phase1_from_csv(trades_pts, csv_path)
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Fase 1: otimizar no TRAIN e avaliar no TEST (temporal 70/30)")
-    p.add_argument("--robot", default="R7", help="Por enquanto só R7 (tem optimize_params na fase1)")
+    p.add_argument("--robot", default="R7", help="R0, R6, R7 ou R8")
     p.add_argument("--csv", default=str(DEFAULT_CSV), help="CSV base para split (default: WIN_5min.csv da fase1)")
     p.add_argument("--train_pct", type=float, default=0.7, help="Percentual para treino (default 0.7)")
     args = p.parse_args()
 
     robot = args.robot.upper()
-    if robot != "R7":
-        raise SystemExit("Nesta limpeza inicial, a otimização executiva foi padronizada para o R7.")
 
     base_csv = Path(args.csv)
     train_csv, test_csv = _ensure_train_test(base_csv, train_pct=float(args.train_pct))
-    best = _optimize_r7(str(train_csv))
-
-    train_m = _evaluate_r7(str(train_csv), best)
-    test_m = _evaluate_r7(str(test_csv), best)
+    if robot == "R0":
+        best = _optimize_r0(str(train_csv))
+        train_m = _evaluate_r0(str(train_csv), best)
+        test_m = _evaluate_r0(str(test_csv), best)
+        defaults_hint = f"ema_fast={best[0]} ema_slow={best[1]} atr_period={best[2]} atr_mean_period={best[3]}"
+    elif robot == "R6":
+        best = _optimize_r6(str(train_csv))
+        train_m = _evaluate_r6(str(train_csv), best)
+        test_m = _evaluate_r6(str(test_csv), best)
+        defaults_hint = f"stop_atr={best[0]} target_atr={best[1]} rsi_thresh={best[2]} rsi_window={best[3]} use_macd_filter={best[4]}"
+    elif robot == "R7":
+        best = _optimize_r7(str(train_csv))
+        train_m = _evaluate_r7(str(train_csv), best)
+        test_m = _evaluate_r7(str(test_csv), best)
+        defaults_hint = f"stop_atr={best[0]} target_atr={best[1]} rsi_bullish={best[2]} use_macd_filter={best[3]}"
+    elif robot == "R8":
+        best = _optimize_r8(str(train_csv))
+        train_m = _evaluate_r8(str(train_csv), best)
+        test_m = _evaluate_r8(str(test_csv), best)
+        defaults_hint = f"ema_fast={best[0]} ema_slow={best[1]} ema_trend={best[2]} momentum_lookback={best[3]} stop_atr={best[4]}"
+    else:
+        raise SystemExit("Robô inválido. Use R0, R6, R7 ou R8.")
 
     print("=" * 90)
-    print("FASE 1 — OTIMIZAÇÃO (TRAIN) + AVALIAÇÃO (TEST) — R7")
+    print(f"FASE 1 — OTIMIZAÇÃO (TRAIN) + AVALIAÇÃO (TEST) — {robot}")
     print("=" * 90)
     print(f"Base:  {base_csv.name}")
     print(f"Train: {train_csv.name} | Test: {test_csv.name}")
     print("-" * 90)
-    print(f"Melhor params: stop={best[0]} target={best[1]} rsi={best[2]} macd={best[3]}")
+    print(f"Melhor params: {defaults_hint}")
     print("-" * 90)
     print(f"TRAIN -> Trades {train_m['n']} | Win {train_m['win_rate']*100:.1f}% | E[P&L] R$ {train_m['e_pl']:.2f} | Total R$ {train_m['total_pl']:.2f}")
     print(f"TEST  -> Trades {test_m['n']} | Win {test_m['win_rate']*100:.1f}% | E[P&L] R$ {test_m['e_pl']:.2f} | Total R$ {test_m['total_pl']:.2f}")

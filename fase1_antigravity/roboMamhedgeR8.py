@@ -12,23 +12,32 @@ from ta.trend import EMAIndicator
 from ta.volatility import AverageTrueRange
 
 from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N_COTAS, MULT_PONTOS_REAIS
+from utils_metrics_pwb import metrics
 
 
 DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
 
 
-def run_backtest(csv_path=DEFAULT_CSV_PATH):
+def run_backtest(
+    csv_path=DEFAULT_CSV_PATH,
+    ema_fast=9,
+    ema_slow=21,
+    ema_trend=50,
+    momentum_lookback=10,
+    stop_atr=2.0,
+    rsi_period=14,
+):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df.columns = df.columns.str.lower()
     df = converter_para_brt(df)
 
-    df['ema9'] = EMAIndicator(df['close'], window=9).ema_indicator()
-    df['ema21'] = EMAIndicator(df['close'], window=21).ema_indicator()
-    df['ema50'] = EMAIndicator(df['close'], window=50).ema_indicator()
-    df['momentum'] = df['close'] - df['close'].shift(10)
-    df['rsi'] = RSIIndicator(df['close'], window=14).rsi()
+    df['ema_fast'] = EMAIndicator(df['close'], window=ema_fast).ema_indicator()
+    df['ema_slow'] = EMAIndicator(df['close'], window=ema_slow).ema_indicator()
+    df['ema_trend'] = EMAIndicator(df['close'], window=ema_trend).ema_indicator()
+    df['momentum'] = df['close'] - df['close'].shift(momentum_lookback)
+    df['rsi'] = RSIIndicator(df['close'], window=rsi_period).rsi()
     df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
 
     df['rsi_peak_max'] = (df['rsi'].shift(1) > df['rsi'].shift(2)) & (df['rsi'].shift(1) > df['rsi'])
@@ -38,21 +47,22 @@ def run_backtest(csv_path=DEFAULT_CSV_PATH):
     stop_loss = 0
     trades = []
 
-    for i in range(50, len(df)):
+    warmup = max(ema_trend, momentum_lookback, 50)
+    for i in range(warmup, len(df)):
         if not dentro_horario_operacao(df.index[i]):
             continue
 
         atr_val = df['atr'].iloc[i]
-        ema50 = df['ema50'].iloc[i]
+        ema_t = df['ema_trend'].iloc[i]
         momentum = df['momentum'].iloc[i]
-        if pd.isna(atr_val) or pd.isna(ema50) or pd.isna(momentum):
+        if pd.isna(atr_val) or pd.isna(ema_t) or pd.isna(momentum):
             continue
 
         if position <= 0:
-            if (df['ema9'].iloc[i] > df['ema21'].iloc[i] and
-                df['close'].iloc[i] > ema50 and momentum > 0):
+            if (df['ema_fast'].iloc[i] > df['ema_slow'].iloc[i] and
+                df['close'].iloc[i] > ema_t and momentum > 0):
                 entry_price = df['close'].iloc[i]
-                stop_loss = entry_price - 2.0 * atr_val
+                stop_loss = entry_price - stop_atr * atr_val
                 position = 1
 
         elif position == 1:
@@ -66,6 +76,37 @@ def run_backtest(csv_path=DEFAULT_CSV_PATH):
                 position = 0
 
     return np.array(trades) if trades else np.array([])
+
+
+def optimize_params(csv_path=DEFAULT_CSV_PATH):
+    """Grid search simples para o R8 (treino)."""
+    best = None
+    best_score = -1e18
+
+    for ema_fast in [5, 9, 12]:
+        for ema_slow in [21, 34]:
+            if ema_fast >= ema_slow:
+                continue
+            for ema_trend in [34, 50, 80]:
+                for mom in [5, 10, 20]:
+                    for stop in [1.5, 2.0, 2.5]:
+                        trades = run_backtest(
+                            csv_path=csv_path,
+                            ema_fast=ema_fast,
+                            ema_slow=ema_slow,
+                            ema_trend=ema_trend,
+                            momentum_lookback=mom,
+                            stop_atr=stop,
+                        )
+                        if len(trades) < 10:
+                            continue
+                        m = metrics(trades)
+                        score = m["total_pl"] + (m["sharpe"] * 200.0)
+                        if score > best_score:
+                            best_score = score
+                            best = (ema_fast, ema_slow, ema_trend, mom, stop, m["n"], m["win_rate"] * 100, m["e_pl"], m["total_pl"])
+
+    return best
 
 
 if __name__ == "__main__":
