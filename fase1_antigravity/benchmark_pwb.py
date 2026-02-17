@@ -89,7 +89,10 @@ def print_benchmark(result, name="Robô"):
 
 
 if __name__ == "__main__":
-    from roboMamhedgeR6 import run_backtest
-
-    result = run_benchmark(run_backtest)
-    print_benchmark(result, "R6")
+    raise SystemExit(
+        "Este arquivo é biblioteca da Fase 1.\n"
+        "Use os scripts executivos:\n"
+        "- python fase1_antigravity/exec_run_robot.py --robot R7\n"
+        "- python fase1_antigravity/exec_compare_robots.py\n"
+        "- python fase1_antigravity/exec_optimize_robot.py --robot R7\n"
+    )
