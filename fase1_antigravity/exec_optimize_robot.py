@@ -7,15 +7,37 @@ import sys
 import numpy as np
 import pandas as pd
 
-from benchmark_pwb import metrics as metrics_phase1
-
-
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 sys.path.insert(0, str(REPO_ROOT))
 DEFAULT_CSV = BASE_DIR / "WIN_5min.csv"
 TRAIN_CSV = BASE_DIR / "WIN_train.csv"
 TEST_CSV = BASE_DIR / "WIN_test.csv"
+
+
+# --------------------------------------------------------------------
+# Conteúdo “embutido” do benchmark_pwb.py (Fase 1)
+# --------------------------------------------------------------------
+from utils_fuso import pnl_reais
+
+
+def metrics_phase1(trades_pts):
+    """Métricas padronizadas. trades_pts = P&L em pontos puros."""
+    if trades_pts is None or len(trades_pts) == 0:
+        return {"n": 0, "win_rate": 0, "e_pl": 0, "total_pl": 0, "sharpe": 0, "max_dd": 0}
+    trades_r = np.array([pnl_reais(t) for t in trades_pts], dtype=float)
+    wins = trades_r[trades_r > 0]
+    n = len(trades_r)
+    wr = len(wins) / n if n > 0 else 0
+    e_pl = float(trades_r.mean())
+    total = float(trades_r.sum())
+    std = float(trades_r.std(ddof=1)) if n > 1 else 0.0
+    sharpe = (e_pl / std * np.sqrt(252)) if std > 0 else 0.0
+    cum = np.cumsum(trades_r)
+    peak = np.maximum.accumulate(cum)
+    dd = peak - cum
+    max_dd = float(dd.max()) if len(dd) > 0 else 0.0
+    return {"n": int(n), "win_rate": float(wr), "e_pl": e_pl, "total_pl": total, "sharpe": float(sharpe), "max_dd": max_dd}
 
 
 def _ensure_train_test(csv_path: Path, train_pct: float = 0.7) -> tuple[Path, Path]:
