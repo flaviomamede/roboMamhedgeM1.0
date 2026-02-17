@@ -23,6 +23,7 @@ import importlib
 r6_orig = importlib.import_module("roboMamhedgeR6 copy")
 from roboMamhedgeR6_v2 import run_backtest as run_r6v2
 from roboMamhedgeR9 import run_backtest as run_r9
+from roboMamhedgeR10 import run_backtest as run_r10
 
 ROBOTS = [
     ("R1", run_r1, "EMAs 9/21"),
@@ -35,7 +36,8 @@ ROBOTS = [
     ("R6", run_r6, "R6 (config): +BB +Stop 2×ATR"),
     ("R7", lambda: run_r7(stop_atr=2.0, target_atr=3.0, rsi_bullish=40, use_macd_filter=False), "R6+TP (s2 t3 r40)"),
     ("R8", run_r8, "R2+R6 (EMA50+Momentum+Peak)"),
-    ("R9", lambda: run_r9(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True), "R9 otimizado: EMA6+RSI+MACD+ADX"),
+    ("R9", lambda: run_r9(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True), "R9 ref: EMA6+RSI+MACD+ADX"),
+    ("R10", lambda: run_r10(ema_fast=6, ema_slow=21, rsi_thresh=40, rsi_window=4, stop_atr=1.7, trail_atr=2.4, breakeven_trigger_atr=1.5, use_macd=True, use_adx=True), "R10 regime+trail+breakeven"),
     ("Contrário", run_contrario, "Inverso R6, stop 0.8 / target 3"),
 ]
 
