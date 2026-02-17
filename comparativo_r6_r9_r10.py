@@ -17,7 +17,10 @@ MC_SIMS = 100
 SEED = 42
 
 
-def _period_business_days(csv_path: str = "WIN_5min.csv") -> int:
+DEFAULT_CSV_PATH = "fase1_antigravity/WIN_5min.csv"
+
+
+def _period_business_days(csv_path: str = DEFAULT_CSV_PATH) -> int:
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -104,7 +107,7 @@ def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> 
 
 
 def run_comparison() -> pd.DataFrame:
-    bdays = _period_business_days("WIN_5min.csv")
+    bdays = _period_business_days(DEFAULT_CSV_PATH)
 
     runs = {
         "R6": run_r6(),

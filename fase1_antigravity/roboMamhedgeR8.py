@@ -6,6 +6,7 @@ R8: Híbrido R2 + R6 — filtros de tendência + saída por pico RSI.
 """
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
 from ta.volatility import AverageTrueRange
@@ -13,7 +14,10 @@ from ta.volatility import AverageTrueRange
 from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N_COTAS, MULT_PONTOS_REAIS
 
 
-def run_backtest(csv_path="WIN_5min.csv"):
+DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
+
+
+def run_backtest(csv_path=DEFAULT_CSV_PATH):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)

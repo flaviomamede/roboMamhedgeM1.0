@@ -18,7 +18,7 @@ from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N
 
 
 def run_backtest(
-    csv_path="WIN_5min.csv",
+    csv_path="fase1_antigravity/WIN_5min.csv",
     stop_atr=STOP_ATR_MULT,
     min_atr=1e-9,
     use_macd_filter=True,

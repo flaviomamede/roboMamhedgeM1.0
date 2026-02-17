@@ -7,6 +7,7 @@ R7: R6 + Take Profit — otimizado para meta >55% win, 11k em 60 dias.
 """
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator, MACD
 from ta.volatility import AverageTrueRange
@@ -18,9 +19,11 @@ from config import (
 )
 from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N_COTAS, MULT_PONTOS_REAIS
 
+DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
+
 
 def run_backtest(
-    csv_path="WIN_5min.csv",
+    csv_path=DEFAULT_CSV_PATH,
     stop_atr=1.5,
     target_atr=2.5,
     rsi_bullish=40,
@@ -95,7 +98,7 @@ def run_backtest(
     return np.array(trades) if trades else np.array([])
 
 
-def optimize_params(csv_path="WIN_5min.csv"):
+def optimize_params(csv_path=DEFAULT_CSV_PATH):
     """Grid search para encontrar melhores parâmetros."""
     best = None
     best_score = -1e9

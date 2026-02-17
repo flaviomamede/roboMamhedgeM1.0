@@ -12,7 +12,7 @@ from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N
 
 
 def run_backtest(
-    csv_path="WIN_5min.csv",
+    csv_path="fase1_antigravity/WIN_5min.csv",
     quantity=1,
     ema_fast=6,
     ema_slow=21,

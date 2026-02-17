@@ -18,8 +18,10 @@ from utils_fuso import converter_para_brt, dentro_horario_operacao, N_COTAS, MUL
 INITIAL_CAPITAL = 10000.0
 CDI_ANNUAL = 0.12 # 12% a.a.
 
+DEFAULT_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fase1_antigravity", "WIN_5min.csv")
+
 def run_detailed_backtest(
-    csv_path="WIN_5min.csv",
+    csv_path=DEFAULT_CSV_PATH,
     ema_fast=4,
     rsi_period=14,
     rsi_thresh=40,
@@ -324,7 +326,7 @@ def generate_flyer(df, trades, equity, metrics, filename="flyer_r9.png"):
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_file = os.path.join(current_dir, "WIN_5min.csv")
+    csv_file = os.path.join(current_dir, "fase1_antigravity", "WIN_5min.csv")
     
     if not os.path.exists(csv_file):
         print(f"Erro: {csv_file} não encontrado.")
@@ -341,5 +343,5 @@ if __name__ == "__main__":
             print(f"{k}: {v}")
             
         # Generate Chart
-        output_file = os.path.join(current_dir, "flyer_r9.png")
+        output_file = os.path.join(current_dir, "fase1_antigravity", "flyer_r9.png")
         generate_flyer(df, trades, equity, metrics, filename=output_file)

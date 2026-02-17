@@ -2,10 +2,24 @@
 Executa cada robô (R1-R8 + Contrário) e Monte Carlo com métricas.
 P&L dos robôs é em pontos puros; conversão para R$ via pnl_reais().
 """
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+BASE_DIR = Path(__file__).resolve().parent
+FASE1_DIR = BASE_DIR / "fase1_antigravity"
+OUTPUT_PNG = FASE1_DIR / "montecarlo_comparativo.png"
+
+# A Fase 1 foi movida para `fase1_antigravity/`. Colocamos este diretório no PYTHONPATH
+# para que imports como `roboMamhedgeR1` continuem funcionando.
+sys.path.insert(0, str(FASE1_DIR))
 
 from roboMamhedgeR1 import run_backtest as run_r1
 from roboMamhedgeR2 import run_backtest as run_r2
@@ -19,11 +33,18 @@ from roboContrario import run_backtest as run_contrario
 from utils_fuso import pnl_reais, N_COTAS, CUSTO_REAIS
 
 # Importa as 3 versões do R6 e o R9
-import importlib
-r6_orig = importlib.import_module("roboMamhedgeR6 copy")
 from roboMamhedgeR6_v2 import run_backtest as run_r6v2
 from roboMamhedgeR9 import run_backtest as run_r9
 from roboMamhedgeR10 import run_backtest as run_r10
+
+# `roboMamhedgeR6 copy.py` tem espaço no nome; carregamos via path.
+_R6_COPY_PATH = FASE1_DIR / "roboMamhedgeR6 copy.py"
+_spec = importlib.util.spec_from_file_location("roboMamhedgeR6_copy", _R6_COPY_PATH)
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"Falha ao carregar {_R6_COPY_PATH}")
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+r6_orig = _mod
 
 ROBOTS = [
     ("R1", run_r1, "EMAs 9/21"),
@@ -68,7 +89,7 @@ def monte_carlo(p_win, avg_gain_r, avg_loss_r):
 
 def main():
     print("=" * 70)
-    print(f"ROBÔS R1-R8 + MONTE CARLO ({N_COTAS} cotas, custo R$ {CUSTO_REAIS:.2f}/trade)")
+    print(f"ROBÔS R1-R8 + MONTE CARLO ({N_COTAS} contratos, custo R$ {CUSTO_REAIS:.2f}/trade)")
     print("=" * 70)
 
     results = []
@@ -116,9 +137,9 @@ def main():
     for idx in range(len(results), len(axes)):
         axes[idx].set_visible(False)
     plt.tight_layout()
-    plt.savefig("montecarlo_comparativo.png", dpi=100)
+    plt.savefig(OUTPUT_PNG, dpi=100)
     plt.close()
-    print("\n--- Gráfico salvo em montecarlo_comparativo.png ---")
+    print(f"\n--- Gráfico salvo em {OUTPUT_PNG} ---")
 
 if __name__ == "__main__":
     main()

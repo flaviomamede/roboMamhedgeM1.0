@@ -6,6 +6,7 @@ Robô Contrário: inverte os sinais do R6 + stops assimétricos.
 """
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator, MACD
 from ta.volatility import BollingerBands, AverageTrueRange
@@ -20,9 +21,10 @@ from utils_fuso import converter_para_brt, dentro_horario_operacao, pnl_reais, N
 
 STOP_ATR = 0.8
 TARGET_ATR = 3.0
+DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
 
 
-def run_backtest(csv_path="WIN_5min.csv", stop_atr=None, target_atr=None):
+def run_backtest(csv_path=DEFAULT_CSV_PATH, stop_atr=None, target_atr=None):
     stop = stop_atr if stop_atr is not None else STOP_ATR
     target = target_atr if target_atr is not None else TARGET_ATR
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)

@@ -12,11 +12,11 @@ O objetivo é testar estratégias de forma quantitativa antes de operar com dinh
 
 ## Escala e modelo de custo
 
-- **Dados:** BOVA11 × 1000 (pontos, alinhado ao Ibovespa)
-- **1 ponto = R$ 0,001 por cota** (`MULT_PONTOS_REAIS = 0.001`)
-- **Posição:** 100 cotas por operação (`N_COTAS = 100`)
+- **Dados:** Mini-Índice (WIN) em pontos
+- **1 ponto = R$ 0,20 por contrato** (`MULT_PONTOS_REAIS = 0.20`)
+- **Posição:** 1 contrato por operação (`N_COTAS = 1`)
 - **Custo:** R$ 2,50 fixo por round-trip (`CUSTO_REAIS = 2.50`)
-- **P&L:** robôs retornam pontos puros; `pnl_reais(pts) = pts × 100 × 0.001 - 2.50`
+- **P&L:** robôs retornam pontos puros; `pnl_reais(pts) = pts × 1 × 0.20 - 2.50`
 
 ---
 
@@ -95,37 +95,28 @@ Essa é a tese central: usar **peak detection no RSI** para antecipar reversões
 ## Estrutura do projeto
 
 ```
-roboMT5/
-├── download_win.py            # Download BOVA11 → pontos (×1000)
-├── converter_csv_para_pontos.py # Converte CSVs antigos
-├── utils_fuso.py              # BRT, horários, pnl_reais(), N_COTAS, CUSTO
-├── config.py                  # Parâmetros centralizados R6
+roboMamhedgeM1.0/
+├── backtest_framework/         # Fase 2: framework profissional (Codex)
+├── tests/                      # Fase 2: testes automatizados
+├── run_backtest_framework.py   # Exemplo de uso do framework
+├── utils_fuso.py               # BRT, horários, pnl_reais(), N_COTAS, CUSTO (WIN)
+├── roboMamhedgeR6.py           # Robô revisado (fase 2)
+├── roboMamhedgeR9.py           # Robô revisado (fase 2)
+├── roboMamhedgeR10.py          # Robô revisado (fase 2)
+├── comparativo_r6_r9_r10.py    # Comparativo R6/R9/R10 (fase 2)
 │
-├── roboMamhedgeR0.py          # Sistema de sinais (EMA + ATR)
-├── roboMamhedgeR1.py          # Backtest com stop/target
-├── roboMamhedgeR2.py          # R1 + EMA200 + Momentum
-├── roboMamhedgeR3.py          # EMAs 20/50
-├── roboMamhedgeR4.py          # MACD + RSI, long-only
-├── roboMamhedgeR5.py          # MACD + RSI, long/short
-├── roboMamhedgeR6 copy.py     # R6 Original (Flavio) — a ideia pura
-├── roboMamhedgeR6_v2.py       # R6 v2 (Cursor) — +MACD +Stop +TP
-├── roboMamhedgeR6.py          # R6 com config centralizada
-├── roboMamhedgeR7.py          # R6 + Take Profit
-├── roboMamhedgeR8.py          # Híbrido R2+R6 (EMA50+Peak)
-├── roboMamhedgeR9.py          # R9 — R6 otimizado (melhor do projeto)
-├── roboContrario.py           # Inverso do R6
+├── fase1_antigravity/          # Fase 1 (legado)
+│   ├── WIN_5min.csv            # Dados de entrada (legado)
+│   ├── WIN_train.csv           # Split treino (gerado no benchmark)
+│   ├── WIN_test.csv            # Split teste (gerado no benchmark)
+│   ├── montecarlo_comparativo.png  # Saída (legado)
+│   ├── flyer_r9.png            # Saída (legado)
+│   ├── *.py                    # Robôs e utilitários da fase 1
+│   └── claude/                 # Materiais/diagnósticos do Claude (legado)
 │
-├── run_all_montecarlo.py      # Executa todos + Monte Carlo
-├── benchmark_pwb.py           # Walk-forward 70/30
-├── diagnostico_escala.py      # Verifica escala dos dados
-├── investigar_escala.py       # Diagnóstico BOVA11 vs WIN
-│
-├── WIN_5min.csv               # Dados (BOVA11 em pontos)
-├── montecarlo_comparativo.png # Gráfico Monte Carlo
-├── RESUMO.md                  # Este arquivo
-├── CHANGELOG.md               # Histórico de versões
-├── FUNDAMENTOS_TRADING.md     # WIN, custos, expectativa
-└── claude/                    # Diagnósticos e baseline do Claude
+├── RESUMO.md                   # Este arquivo
+├── CHANGELOG.md                # Histórico de versões
+└── FUNDAMENTOS_TRADING.md      # Notas de trading/custos
 ```
 
 ---
@@ -134,7 +125,7 @@ roboMT5/
 
 ```bash
 # 1. Baixar dados
-python download_win.py
+python fase1_antigravity/download_win.py
 
 # 2. Rodar um robô específico
 python roboMamhedgeR9.py   # R9 (melhor) — inclui otimização
@@ -144,7 +135,7 @@ python roboMamhedgeR6.py   # R6, R1, R2...
 python run_all_montecarlo.py
 
 # 4. Benchmark walk-forward
-python benchmark_pwb.py
+python fase1_antigravity/benchmark_pwb.py
 ```
 
 ---

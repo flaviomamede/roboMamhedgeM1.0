@@ -7,7 +7,11 @@ P&L dos robôs em pontos puros; conversão para R$ via pnl_reais().
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+from pathlib import Path
 from utils_fuso import pnl_reais, N_COTAS, CUSTO_REAIS
+
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_CSV_PATH = BASE_DIR / "WIN_5min.csv"
 
 
 def walk_forward_split(df, train_pct=0.7):
@@ -18,7 +22,7 @@ def walk_forward_split(df, train_pct=0.7):
     return train, test
 
 
-def run_benchmark(run_backtest_fn, csv_path="WIN_5min.csv", train_pct=0.7):
+def run_benchmark(run_backtest_fn, csv_path=DEFAULT_CSV_PATH, train_pct=0.7):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -30,8 +34,8 @@ def run_benchmark(run_backtest_fn, csv_path="WIN_5min.csv", train_pct=0.7):
     test_start = test_df.index[0]
     test_end = test_df.index[-1]
 
-    train_path = "WIN_train.csv"
-    test_path = "WIN_test.csv"
+    train_path = BASE_DIR / "WIN_train.csv"
+    test_path = BASE_DIR / "WIN_test.csv"
     train_df.to_csv(train_path)
     test_df.to_csv(test_path)
 
