@@ -1,15 +1,11 @@
 """
-R9: Versão otimizada do R6 (a ideia do Flavio, refinada).
+R9 (revisado): RSI Window + EMA rápida + ADX/MACD opcionais + Stop ATR/Target ATR.
 
-Mantém o conceito central: RSI Peak Detection + EMA rápida.
-Otimizações sobre o R6 original:
-  1. Grid search nos parâmetros (RSI threshold, janela, EMA, stop, target)
-  2. Stop ATR obrigatório (o original não tinha stop)
-  3. Filtro ADX > 20 (só opera em mercado com tendência)
-  4. Fechamento forçado no fim do dia
-  5. Sem Bollinger Bands (simplificação — menos overfitting)
-
-Parâmetros otimizáveis via run_backtest() kwargs.
+Melhorias práticas (sem nova otimização de parâmetros):
+- Remove ramos de short não utilizados e deixa fluxo long-only explícito.
+- Fecha posição por troca de dia e fora da sessão (sem carregar overnight).
+- Adiciona proteção de ATR mínimo e limite de barras em posição (time stop).
+- Resolve conflito intrabar stop/target de forma conservadora (stop primeiro).
 """
 import pandas as pd
 import numpy as np
@@ -27,10 +23,12 @@ def run_backtest(
     rsi_thresh=40,
     rsi_window=5,
     stop_atr=2.0,
-    target_atr=0,       # 0 = sem target (sai só por peak ou stop)
+    target_atr=0,
     use_macd=False,
     use_adx=True,
     adx_min=20,
+    min_atr=1e-9,
+    max_bars_in_trade=48,
 ):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
@@ -38,7 +36,6 @@ def run_backtest(
     df.columns = df.columns.str.lower()
     df = converter_para_brt(df)
 
-    # Indicadores
     df['rsi'] = RSIIndicator(df['close'], window=rsi_period).rsi()
     df['ema'] = EMAIndicator(df['close'], window=ema_fast).ema_indicator()
     df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
@@ -50,85 +47,93 @@ def run_backtest(
     if use_adx:
         df['adx'] = ADXIndicator(df['high'], df['low'], df['close'], window=14).adx()
 
-    # Peak detection e janela bullish (a ideia central do Flavio)
     df['rsi_peak_max'] = (df['rsi'].shift(1) > df['rsi'].shift(2)) & (df['rsi'].shift(1) > df['rsi'])
     df['rsi_bullish_window'] = (df['rsi'] > rsi_thresh).rolling(window=rsi_window).max()
 
     position = 0
-    entry_price = 0
-    stop_loss = 0
-    take_profit = 0
+    entry_price = 0.0
+    stop_loss = 0.0
+    take_profit = 0.0
+    bars_in_trade = 0
+    entry_day = None
     trades = []
 
     for i in range(2, len(df)):
         ts = df.index[i]
 
-        # Fechar no fim do dia
-        if ts.hour >= 17 and position != 0:
-            if position == 1:
-                trades.append(df['close'].iloc[i] - entry_price)
-            elif position == -1:
-                trades.append(entry_price - df['close'].iloc[i])
-            position = 0
-            continue
-
-        if not dentro_horario_operacao(ts):
-            continue
-
         atr_val = df['atr'].iloc[i]
-        if pd.isna(atr_val) or atr_val == 0:
-            continue
 
-        # Filtro ADX
-        if use_adx:
-            adx_val = df['adx'].iloc[i]
-            if pd.isna(adx_val) or adx_val < adx_min:
+        if position == 1:
+            bars_in_trade += 1
+
+            if ts.date() != entry_day or not dentro_horario_operacao(ts):
+                trades.append(df['close'].iloc[i] - entry_price)
+                position = 0
+                bars_in_trade = 0
                 continue
 
-        # --- ENTRADA ---
-        if position <= 0:
+            hit_stop = df['low'].iloc[i] <= stop_loss
+            hit_tp = take_profit > 0 and df['high'].iloc[i] >= take_profit
+            peak = bool(df['rsi_peak_max'].iloc[i])
+
+            if hit_stop:
+                trades.append(stop_loss - entry_price)
+                position = 0
+                bars_in_trade = 0
+                continue
+
+            if hit_tp:
+                trades.append(take_profit - entry_price)
+                position = 0
+                bars_in_trade = 0
+                continue
+
+            if peak or bars_in_trade >= max_bars_in_trade:
+                trades.append(df['close'].iloc[i] - entry_price)
+                position = 0
+                bars_in_trade = 0
+                continue
+
+        if position == 0:
+            if not dentro_horario_operacao(ts):
+                continue
+
+            if pd.isna(atr_val) or atr_val <= min_atr:
+                continue
+
+            if use_adx:
+                adx_val = df['adx'].iloc[i]
+                if pd.isna(adx_val) or adx_val < adx_min:
+                    continue
+
             rsi_win = df['rsi_bullish_window'].iloc[i]
-            if pd.isna(rsi_win) or not rsi_win:
+            if pd.isna(rsi_win) or not bool(rsi_win):
                 continue
 
             ema_up = df['ema'].iloc[i] > df['ema'].iloc[i - 1]
             if not ema_up:
                 continue
 
-            macd_ok = True
             if use_macd:
                 macd_val = df['macd_hist'].iloc[i]
-                macd_ok = pd.isna(macd_val) or macd_val > 0
+                if not (pd.isna(macd_val) or macd_val > 0):
+                    continue
 
-            if macd_ok:
-                if position == -1:
-                    trades.append(entry_price - df['close'].iloc[i])
-                entry_price = df['close'].iloc[i]
-                stop_loss = entry_price - stop_atr * atr_val
-                take_profit = entry_price + target_atr * atr_val if target_atr > 0 else 0
-                position = 1
+            entry_price = df['close'].iloc[i]
+            stop_loss = entry_price - stop_atr * atr_val
+            take_profit = entry_price + target_atr * atr_val if target_atr > 0 else 0.0
+            bars_in_trade = 0
+            entry_day = ts.date()
+            position = 1
 
-        # --- SAÍDA ---
-        elif position == 1:
-            hit_stop = df['low'].iloc[i] <= stop_loss
-            hit_tp = take_profit > 0 and df['high'].iloc[i] >= take_profit
-            peak = df['rsi_peak_max'].iloc[i]
-
-            if hit_stop:
-                trades.append(stop_loss - entry_price)
-                position = 0
-            elif peak:
-                trades.append(df['close'].iloc[i] - entry_price)
-                position = 0
-            elif hit_tp:
-                trades.append(take_profit - entry_price)
-                position = 0
+    if position == 1:
+        trades.append(df['close'].iloc[-1] - entry_price)
 
     return np.array(trades) if trades else np.array([])
 
 
 def optimize(csv_path="WIN_5min.csv"):
-    """Grid search nos parâmetros chave do R6."""
+    """Grid search legado (manter como utilitário; usar com parcimônia e walk-forward)."""
     best = None
     best_score = -1e9
     results = []
@@ -152,7 +157,6 @@ def optimize(csv_path="WIN_5min.csv"):
                                 wr = (tr > 0).mean()
                                 epl = tr.mean()
                                 total = tr.sum()
-                                # Score: E[P&L] × sqrt(n_trades) — balanceia retorno e consistência
                                 score = epl * np.sqrt(len(tr))
                                 if wr >= 0.45:
                                     score *= 1.2
@@ -171,39 +175,13 @@ def optimize(csv_path="WIN_5min.csv"):
 
 
 if __name__ == "__main__":
-    # Primeiro roda com defaults
     trades = run_backtest()
     if len(trades) > 0:
         tr = np.array([pnl_reais(t) for t in trades])
         wr = (tr > 0).mean() * 100
-        print(f"[R9 default] Trades: {len(tr)} ({N_COTAS} cotas) | Win: {wr:.1f}% | "
-              f"E[P&L]: R$ {tr.mean():.2f}/trade | Total: R$ {tr.sum():.2f}")
-    else:
-        print("[R9 default] Nenhum trade.")
-
-    # Otimização
-    print("\n--- Otimização R9 (grid search) ---")
-    best, all_res = optimize()
-    if best:
-        print(f"\nMelhor configuração:")
-        print(f"  EMA={best['ema']}, RSI>{best['rsi_t']} (janela {best['rsi_w']}), "
-              f"Stop={best['stop']}×ATR, Target={best['target']}×ATR, "
-              f"MACD={'Sim' if best['macd'] else 'Não'}, ADX={'Sim' if best['adx'] else 'Não'}")
-        print(f"  → {best['n']} trades, {best['wr']:.1f}% win, E[P&L]=R$ {best['epl']:.2f}, Total R$ {best['total']:.2f}")
-
-        print(f"\nTop 10:")
-        for r in all_res[:10]:
-            print(f"  E{r['ema']} R{r['rsi_t']}w{r['rsi_w']} s{r['stop']} t{r['target']} "
-                  f"m{'Y' if r['macd'] else 'N'} a{'Y' if r['adx'] else 'N'}: "
-                  f"{r['n']}t {r['wr']:.0f}%w R${r['epl']:.2f}/t R${r['total']:.0f}")
-
-        # Roda o melhor para confirmar
-        print(f"\n--- Rodando melhor config ---")
-        trades_best = run_backtest(
-            ema_fast=best['ema'], rsi_thresh=best['rsi_t'], rsi_window=best['rsi_w'],
-            stop_atr=best['stop'], target_atr=best['target'],
-            use_macd=best['macd'], use_adx=best['adx'],
+        print(
+            f"[R9 revisado] Trades: {len(tr)} ({N_COTAS} cotas) | "
+            f"Win: {wr:.1f}% | E[P&L]: R$ {tr.mean():.2f}/trade | Total: R$ {tr.sum():.2f}"
         )
-        tr_best = np.array([pnl_reais(t) for t in trades_best])
-        print(f"  Confirmado: {len(tr_best)} trades, {(tr_best > 0).mean()*100:.1f}% win, "
-              f"E[P&L]=R$ {tr_best.mean():.2f}, Total=R$ {tr_best.sum():.2f}")
+    else:
+        print("[R9 revisado] Nenhum trade.")
