@@ -17,6 +17,7 @@ DEFAULT_CSV = BASE_DIR / "WIN_5min.csv"
 
 def _run_all(csv_path: str) -> list[tuple[str, dict]]:
     # Imports locais para evitar custo ao importar o módulo
+    from roboMamhedgeR0 import run_backtest as run_r0
     from roboMamhedgeR1 import run_backtest as run_r1
     from roboMamhedgeR2 import run_backtest as run_r2
     from roboMamhedgeR3 import run_backtest as run_r3
@@ -39,6 +40,7 @@ def _run_all(csv_path: str) -> list[tuple[str, dict]]:
     run_r6orig = mod.run_backtest
 
     robots = [
+        ("R0", run_r0),
         ("R1", run_r1),
         ("R2", run_r2),
         ("R3", run_r3),
@@ -62,9 +64,18 @@ def _run_all(csv_path: str) -> list[tuple[str, dict]]:
 def main() -> None:
     p = argparse.ArgumentParser(description="Fase 1: comparar vários robôs (tabela)")
     p.add_argument("--csv", default=str(DEFAULT_CSV), help="Caminho do CSV (default: WIN_5min.csv da fase1)")
+    p.add_argument(
+        "--robots",
+        default="R1,R2,R3,R4,R5,R6orig,R6v2,R7,R8,Contrario",
+        help="Lista separada por vírgula. Ex.: R8,R1 ou R6orig,R7,R8",
+    )
     args = p.parse_args()
 
-    rows = _run_all(args.csv)
+    selected = [r.strip() for r in str(args.robots).split(",") if r.strip()]
+    rows_all = _run_all(args.csv)
+    rows = [row for row in rows_all if row[0].lower() in {s.lower() for s in selected}]
+    if not rows:
+        raise SystemExit("Nenhum robô selecionado. Use --robots com nomes válidos (ex.: R8,R1).")
     # ordenar por total_pl desc, depois e_pl desc
     rows.sort(key=lambda x: (x[1]["total_pl"], x[1]["e_pl"]), reverse=True)
 
