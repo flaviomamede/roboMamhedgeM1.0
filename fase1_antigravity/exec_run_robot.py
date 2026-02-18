@@ -24,7 +24,8 @@ ROBOT_MODULES = {
     "R3": "roboMamhedgeR3",
     "R4": "roboMamhedgeR4",
     "R5": "roboMamhedgeR5",
-    "R6ORIG": "roboMamhedgeR6 copy",  # arquivo com espaço
+    "R6": "roboMamhedgeR6 copy",  # arquivo com espaço (R6 original da Fase 1)
+    "R6ORIG": "roboMamhedgeR6 copy",  # alias legado
     "R6V2": "roboMamhedgeR6_v2",
     "R7": "roboMamhedgeR7",
     "R8": "roboMamhedgeR8",
@@ -58,7 +59,7 @@ def _load_run_backtest(robot_key: str):
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Fase 1: rodar 1 robô e imprimir métricas")
-    p.add_argument("--robot", required=True, help="Ex.: R7, R6orig, R6v2, R9, R10, Contrario")
+    p.add_argument("--robot", required=True, help="Ex.: R7, R6, R6v2, R9, R10, Contrario")
     p.add_argument("--csv", default=str(DEFAULT_CSV), help="Caminho do CSV (default: WIN_5min.csv da fase1)")
     args = p.parse_args()
 

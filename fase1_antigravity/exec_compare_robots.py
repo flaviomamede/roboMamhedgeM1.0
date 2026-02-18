@@ -72,7 +72,7 @@ def _run_all(csv_path: str, mc_sims: int, seed: int) -> list[tuple[str, dict]]:
         ("R3", run_r3),
         ("R4", run_r4),
         ("R5", run_r5),
-        ("R6orig", run_r6orig),
+        ("R6", run_r6orig),
         ("R6v2", run_r6v2),
         ("R7", run_r7),
         ("R8", run_r8),
@@ -98,8 +98,8 @@ def main() -> None:
     p.add_argument("--csv", default=str(DEFAULT_CSV), help="Caminho do CSV (default: WIN_5min.csv da fase1)")
     p.add_argument(
         "--robots",
-        default="R0,R1,R2,R3,R4,R5,R6orig,R6v2,R7,R8,R9,R10,Contrario",
-        help="Lista separada por vírgula. Ex.: R8,R1 ou R6orig,R7,R8",
+        default="R0,R1,R2,R3,R4,R5,R6,R6v2,R7,R8,R9,R10,Contrario",
+        help="Lista separada por vírgula. Ex.: R8,R1 ou R6,R7,R8",
     )
     p.add_argument(
         "--mc_sims",
