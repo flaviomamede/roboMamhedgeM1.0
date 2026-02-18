@@ -74,7 +74,7 @@ def run_backtest_trades(
     stop_atr: float = 2.0,
     trail_atr: float = 2.2,
     breakeven_trigger_atr: float = 2.2,
-    use_adx: bool = True,
+    use_adx: bool = False,   # ER já filtra o regime; ADX vira confirmação opcional
     adx_min: float = 20.0,
     use_macd: bool = True,
     use_vwap_filter: bool = True,
@@ -317,7 +317,7 @@ def run_backtest(
     stop_atr: float = 2.0,
     trail_atr: float = 2.2,
     breakeven_trigger_atr: float = 2.2,
-    use_adx: bool = True,
+    use_adx: bool = False,
     adx_min: float = 20.0,
     use_macd: bool = True,
     use_vwap_filter: bool = True,
