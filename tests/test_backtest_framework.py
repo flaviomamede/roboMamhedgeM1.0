@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
+import sys
 import unittest
+
+# Permite rodar via comando direto:
+#   python tests/test_backtest_framework.py
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from backtest_framework.engine import BacktestEngine
 from backtest_framework.metrics import compute_metrics
