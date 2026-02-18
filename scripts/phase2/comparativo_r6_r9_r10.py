@@ -15,6 +15,8 @@ if str(REPO_ROOT) not in sys.path:
 from roboMamhedgeR6 import run_backtest_trades as run_r6_trades
 from roboMamhedgeR9 import run_backtest_trades as run_r9_trades
 from roboMamhedgeR10 import run_backtest_trades as run_r10_trades
+from roboMamhedgeR10v2 import run_backtest_trades as run_r10v2_trades
+from roboMamhedgeR11 import run_backtest_trades as run_r11_trades
 from b3_costs_phase2 import default_b3_cost_model, trade_net_pnl_brl
 
 CAPITAL_INICIAL = 10_000.0
@@ -25,7 +27,7 @@ SEED = 42
 
 DEFAULT_CSV_PATH = "fase1_antigravity/WIN_5min.csv"
 DEFAULT_REPORT_DIR = REPO_ROOT / "reports" / "phase2"
-DEFAULT_REPORT_IMG = DEFAULT_REPORT_DIR / "montecarlo_1000_retornos_r6_r9_r10.png"
+DEFAULT_REPORT_IMG = DEFAULT_REPORT_DIR / "montecarlo_1000_retornos_comparativo.png"
 
 
 def _period_business_days(csv_path: str = DEFAULT_CSV_PATH) -> int:
@@ -97,7 +99,10 @@ def _monte_carlo_returns_pct(trades_r: np.ndarray, capital: float, sims: int, se
 
 
 def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+    n = len(mc_data)
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 4), sharey=True)
+    if n == 1:
+        axes = [axes]
     for ax, (name, values) in zip(axes, mc_data.items()):
         ax.hist(values, bins=18, alpha=0.85, color="#3b82f6", edgecolor="black")
         mean = values.mean() if len(values) else 0.0
@@ -107,7 +112,7 @@ def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> 
         ax.grid(alpha=0.2)
         ax.legend(fontsize=8)
     axes[0].set_ylabel("Frequência")
-    fig.suptitle("Monte Carlo (1000 simulações) - Distribuição de retornos em torno da média", fontsize=11)
+    fig.suptitle("Monte Carlo 1000 sims — Retornos acumulados (R6, R9, R10, R10v2, R11)", fontsize=11)
     plt.tight_layout()
     plt.savefig(output_path, dpi=120)
     plt.close(fig)
@@ -122,6 +127,8 @@ def run_comparison() -> pd.DataFrame:
         "R6": run_r6_trades(),
         "R9": run_r9_trades(),
         "R10": run_r10_trades(),
+        "R10v2": run_r10v2_trades(),
+        "R11": run_r11_trades(),
     }
 
     rows = []
@@ -156,8 +163,8 @@ def run_comparison() -> pd.DataFrame:
 
 def main() -> None:
     df_cmp = run_comparison()
-    with pd.option_context("display.max_columns", None, "display.width", 180):
-        print("\n=== Comparativo R6 vs R9 vs R10 ===")
+    with pd.option_context("display.max_columns", None, "display.width", 220):
+        print("\n=== Comparativo R6 / R9 / R10 / R10v2 / R11 ===")
         print(df_cmp.to_string(index=False, float_format=lambda x: f"{x:,.4f}"))
     print(f"\nGráfico salvo em: {DEFAULT_REPORT_IMG}")
 
