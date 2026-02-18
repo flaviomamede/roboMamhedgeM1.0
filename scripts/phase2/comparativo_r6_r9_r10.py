@@ -19,11 +19,13 @@ from b3_costs_phase2 import default_b3_cost_model, trade_net_pnl_brl
 
 CAPITAL_INICIAL = 10_000.0
 CDI_ANUAL = 0.1175  # ajuste conforme cenário desejado
-MC_SIMS = 100
+MC_SIMS = 1000
 SEED = 42
 
 
 DEFAULT_CSV_PATH = "fase1_antigravity/WIN_5min.csv"
+DEFAULT_REPORT_DIR = REPO_ROOT / "reports" / "phase2"
+DEFAULT_REPORT_IMG = DEFAULT_REPORT_DIR / "montecarlo_1000_retornos_r6_r9_r10.png"
 
 
 def _period_business_days(csv_path: str = DEFAULT_CSV_PATH) -> int:
@@ -105,7 +107,7 @@ def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> 
         ax.grid(alpha=0.2)
         ax.legend(fontsize=8)
     axes[0].set_ylabel("Frequência")
-    fig.suptitle("Monte Carlo (100 simulações) - Distribuição de retornos em torno da média", fontsize=11)
+    fig.suptitle("Monte Carlo (1000 simulações) - Distribuição de retornos em torno da média", fontsize=11)
     plt.tight_layout()
     plt.savefig(output_path, dpi=120)
     plt.close(fig)
@@ -116,9 +118,10 @@ def run_comparison() -> pd.DataFrame:
 
     cost_model = default_b3_cost_model()
     runs = {
+        # Usa defaults atuais dos robôs (já otimizados no projeto).
         "R6": run_r6_trades(),
-        "R9": run_r9_trades(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True),
-        "R10": run_r10_trades(ema_fast=6, ema_slow=21, rsi_thresh=40, rsi_window=4, stop_atr=1.7, trail_atr=2.4, breakeven_trigger_atr=1.5, use_macd=True, use_adx=True),
+        "R9": run_r9_trades(),
+        "R10": run_r10_trades(),
     }
 
     rows = []
@@ -144,15 +147,20 @@ def run_comparison() -> pd.DataFrame:
             "mc_desvio_retorno_%": mc.std(ddof=1) if len(mc) > 1 else 0.0,
         })
 
-    _plot_mc_distributions(mc_data, "montecarlo_100_retornos_r6_r9_r10.png")
+    DEFAULT_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    _plot_mc_distributions(mc_data, str(DEFAULT_REPORT_IMG))
 
     df_out = pd.DataFrame(rows).sort_values("alpha_vs_cdi_pp", ascending=False).reset_index(drop=True)
     return df_out
 
 
-if __name__ == "__main__":
+def main() -> None:
     df_cmp = run_comparison()
     with pd.option_context("display.max_columns", None, "display.width", 180):
         print("\n=== Comparativo R6 vs R9 vs R10 ===")
         print(df_cmp.to_string(index=False, float_format=lambda x: f"{x:,.4f}"))
-    print("\nGráfico salvo em: montecarlo_100_retornos_r6_r9_r10.png")
+    print(f"\nGráfico salvo em: {DEFAULT_REPORT_IMG}")
+
+
+if __name__ == "__main__":
+    main()
