@@ -28,8 +28,15 @@ def run_backtest_trades(
     adx_min=30,
     min_atr=1e-9,
     max_bars_in_trade=48,
+    with_timestamps: bool = False,
 ):
-    """Retorna trades com entry/exit (pontos) para cálculo de custos realistas."""
+    """Retorna trades com entry/exit (pontos) para cálculo de custos realistas.
+
+    Quando `with_timestamps=True`, retorna lista de dicts com:
+    - trade: TradePoints
+    - entry_time: timestamp da entrada
+    - exit_time: timestamp da saída
+    """
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -56,7 +63,9 @@ def run_backtest_trades(
     take_profit = 0.0
     bars_in_trade = 0
     entry_day = None
+    entry_ts = None
     trades: list[TradePoints] = []
+    trades_ts: list[dict] = []
 
     for i in range(2, len(df)):
         ts = df.index[i]
@@ -68,28 +77,40 @@ def run_backtest_trades(
             # Session Exit
             if ts.date() != entry_day or not dentro_horario_operacao(ts):
                 exit_price = float(df['close'].iloc[i])
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
             # Stop first
             if df['low'].iloc[i] <= stop_loss:
                 exit_price = float(stop_loss)
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
             # Target second
             if take_profit > 0 and df['high'].iloc[i] >= take_profit:
                 exit_price = float(take_profit)
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
             # RSI peak or time stop
             if bool(df['rsi_peak_max'].iloc[i]) or bars_in_trade >= max_bars_in_trade:
                 exit_price = float(df['close'].iloc[i])
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
@@ -122,13 +143,17 @@ def run_backtest_trades(
             take_profit = float(entry_price + target_atr * atr_val) if target_atr > 0 else 0.0
             bars_in_trade = 0
             entry_day = ts.date()
+            entry_ts = ts
             position = 1
 
     if position == 1:
         exit_price = float(df['close'].iloc[-1])
-        trades.append(TradePoints(float(entry_price), exit_price, quantity))
+        t = TradePoints(float(entry_price), exit_price, quantity)
+        trades.append(t)
+        if with_timestamps and entry_ts is not None:
+            trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": df.index[-1]})
 
-    return trades
+    return trades_ts if with_timestamps else trades
 
 
 def run_backtest(

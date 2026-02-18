@@ -44,13 +44,12 @@ class TradePoints:
 
 
 def default_b3_cost_model() -> B3CostModel:
-    """Config padrão razoável (ajuste para sua corretora/cenário)."""
+    """Config padrão para WIN day trade: custo fixo por contrato/ordem."""
     return B3CostModel(
         B3Costs(
-            brokerage_per_order=1.20,
-            exchange_fee_rate=0.0002,
-            registration_fee_rate=0.00005,
-            emoluments_rate=0.00003,
+            pricing_model="futures_per_contract",
+            fixed_fee_per_contract=0.30,
+            brokerage_per_order=0.0,
             iss_rate=0.05,
         )
     )
@@ -58,7 +57,9 @@ def default_b3_cost_model() -> B3CostModel:
 
 def trade_costs_brl(trade: TradePoints, cost_model: B3CostModel) -> float:
     """Custo total (entrada+saída) em R$ para um trade."""
-    return cost_model.calculate(trade.entry_gross_value_brl) + cost_model.calculate(trade.exit_gross_value_brl)
+    return cost_model.calculate(trade.entry_gross_value_brl, quantity=trade.quantity) + cost_model.calculate(
+        trade.exit_gross_value_brl, quantity=trade.quantity
+    )
 
 
 def trade_net_pnl_brl(trade: TradePoints, cost_model: B3CostModel) -> float:

@@ -1,10 +1,6 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from ta.momentum import RSIIndicator
-from ta.trend import EMAIndicator, MACD, ADXIndicator
-from ta.volatility import AverageTrueRange
 
 # Import utilities from the sibling module
 # We need to make sure python path sees the current directory
@@ -14,8 +10,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from market_time import converter_para_brt, dentro_horario_operacao
-from b3_costs_phase2 import TradePoints, default_b3_cost_model, trade_costs_brl, trade_net_pnl_brl
+from market_time import converter_para_brt
+from b3_costs_phase2 import default_b3_cost_model, trade_costs_brl, trade_net_pnl_brl
+from roboMamhedgeR9 import run_backtest_trades
 
 # --- Configuration ---
 INITIAL_CAPITAL = 10000.0
@@ -27,178 +24,40 @@ DEFAULT_CSV_PATH = os.path.join(REPO_ROOT, "fase1_antigravity", "WIN_5min.csv")
 DEFAULT_OUTPUT_DIR = os.path.join(REPO_ROOT, "reports", "phase2")
 DEFAULT_OUTPUT_FILE = os.path.join(DEFAULT_OUTPUT_DIR, "flyer_r9.png")
 
-def run_detailed_backtest(
-    csv_path=DEFAULT_CSV_PATH,
-    # Defaults alinhados ao R9 otimizado atual
-    ema_fast=4,
-    rsi_period=7,
-    rsi_thresh=45,
-    rsi_window=9,
-    stop_atr=2.4,
-    target_atr=2.0,
-    use_macd=True,
-    use_adx=True,
-    adx_min=30,
-):
+def run_detailed_backtest(csv_path=DEFAULT_CSV_PATH):
     print(f"Carregando dados de {csv_path}...")
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df.columns = df.columns.str.lower()
     df = converter_para_brt(df)
-    
-    # Sort just in case
     df.sort_index(inplace=True)
+    print("Simulando trades com roboMamhedgeR9.run_backtest_trades()...")
+    trades_with_ts = run_backtest_trades(csv_path=csv_path, quantity=DEFAULT_QUANTITY, with_timestamps=True)
 
-    print("Calculando indicadores...")
-    # Indicators
-    df['rsi'] = RSIIndicator(df['close'], window=rsi_period).rsi()
-    df['ema'] = EMAIndicator(df['close'], window=ema_fast).ema_indicator()
-    df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
+    trades_rows = []
+    for idx, item in enumerate(trades_with_ts, start=1):
+        t = item["trade"]
+        net = trade_net_pnl_brl(t, _COST_MODEL)
+        costs = trade_costs_brl(t, _COST_MODEL)
+        trades_rows.append(
+            {
+                "trade_id": idx,
+                "entry_time": item["entry_time"],
+                "exit_time": item["exit_time"],
+                "entry_price": float(t.entry_price_points),
+                "exit_price": float(t.exit_price_points),
+                "points": float(t.exit_price_points - t.entry_price_points),
+                "pnl_brl": float(net),
+                "costs_brl": float(costs),
+            }
+        )
 
-    if use_macd:
-        macd = MACD(df['close'], window_slow=26, window_fast=12, window_sign=9)
-        df['macd_hist'] = macd.macd_diff()
+    equity = [INITIAL_CAPITAL]
+    for row in trades_rows:
+        equity.append(equity[-1] + row["pnl_brl"])
 
-    if use_adx:
-        df['adx'] = ADXIndicator(df['high'], df['low'], df['close'], window=14).adx()
-
-    # Peak detection
-    df['rsi_peak_max'] = (df['rsi'].shift(1) > df['rsi'].shift(2)) & (df['rsi'].shift(1) > df['rsi'])
-    df['rsi_bullish_window'] = (df['rsi'] > rsi_thresh).rolling(window=rsi_window).max()
-
-    position = 0
-    entry_price = 0
-    stop_loss = 0
-    take_profit = 0
-    
-    trades = [] # List of dicts: {entry_time, exit_time, entry_price, exit_price, type (buy/sell), result_points, result_brl}
-    
-    # Equity curve simulation
-    # We will track equity at every bar close
-    equity = [INITIAL_CAPITAL] * len(df)
-    current_capital = INITIAL_CAPITAL
-    
-    print("Simulando trades...")
-    for i in range(2, len(df)):
-        ts = df.index[i]
-        
-        # Determine Trade Logic
-        trade_executed = False
-        pnl_trade = 0
-        
-        # 1. Force Close at End of Day
-        if ts.hour >= 17 and position != 0:
-            exit_price = df['close'].iloc[i]
-            if position == 1:
-                pts = exit_price - entry_price
-            elif position == -1:
-                pts = entry_price - exit_price
-
-            trade = TradePoints(entry_price_points=float(entry_price), exit_price_points=float(exit_price), quantity=DEFAULT_QUANTITY)
-            trade_res_brl = trade_net_pnl_brl(trade, _COST_MODEL)
-            trades.append({
-                'entry_time': entry_ts,
-                'exit_time': ts,
-                'entry_price': entry_price,
-                'exit_price': exit_price,
-                'position': position,
-                'points': pts,
-                'pnl_brl': trade_res_brl,
-                'costs_brl': trade_costs_brl(trade, _COST_MODEL),
-            })
-            current_capital += trade_res_brl
-            position = 0
-            equity[i] = current_capital
-            continue
-
-        if not dentro_horario_operacao(ts):
-            equity[i] = current_capital
-            continue
-
-        atr_val = df['atr'].iloc[i]
-        if pd.isna(atr_val) or atr_val == 0:
-            equity[i] = current_capital
-            continue
-
-        # ADX Filter
-        if use_adx:
-            adx_val = df['adx'].iloc[i]
-            if pd.isna(adx_val) or adx_val < adx_min:
-                equity[i] = current_capital
-                continue
-
-        # --- ENTRY ---
-        if position == 0:
-            rsi_win = df['rsi_bullish_window'].iloc[i]
-            if not pd.isna(rsi_win) and rsi_win:
-                ema_up = df['ema'].iloc[i] > df['ema'].iloc[i - 1]
-                if ema_up:
-                    macd_ok = True
-                    if use_macd:
-                        macd_val = df['macd_hist'].iloc[i]
-                        macd_ok = pd.isna(macd_val) or macd_val > 0
-                    
-                    if macd_ok:
-                         # For this robot, logic seems to be LONG ONLY or derived?
-                         # R9 original generic code:
-                         # if position <= 0... 
-                         # Actually looking at R9 code: `if position <= 0:` inside entry block implies it might reverse from Short to Long?
-                         # But wait, looking closer at R9 code:
-                         # `if position == -1:` -> closes short then buys? 
-                         # NO, R9 logic in `if position <= 0:` checks signals to BUY (Long).
-                         # It does NOT seem to have Short logic implemented in the `elif` blocks or specific short signals.
-                         # The provided R9 code primarily scans for `ema_up` and `rsi_bullish`. This is a LONG ONLY strategy setup in the provided snippet?
-                         # Let's re-read R9 line 89: `if position <= 0:`
-                         # And line 112: `elif position == 1:` which handles exit.
-                         # There is no `elif position == -1:` block for managing a short position, and no trigger to go `position = -1`.
-                         # So R9 is effectively Long Only as written in the provided file.
-                         
-                         entry_price = df['close'].iloc[i]
-                         entry_ts = ts
-                         stop_loss = entry_price - stop_atr * atr_val
-                         take_profit = entry_price + target_atr * atr_val if target_atr > 0 else 0
-                         position = 1
-        
-        # --- EXIT ---
-        elif position == 1:
-            hit_stop = df['low'].iloc[i] <= stop_loss
-            hit_tp = take_profit > 0 and df['high'].iloc[i] >= take_profit
-            peak = df['rsi_peak_max'].iloc[i]
-            
-            exit_signal = False
-            exit_price_exec = 0
-            
-            if hit_stop:
-                exit_signal = True
-                exit_price_exec = stop_loss # Simulate stop execution at price
-            elif hit_tp:
-                exit_signal = True
-                exit_price_exec = take_profit
-            elif peak:
-                exit_signal = True
-                exit_price_exec = df['close'].iloc[i]
-            
-            if exit_signal:
-                pts = exit_price_exec - entry_price
-                trade = TradePoints(entry_price_points=float(entry_price), exit_price_points=float(exit_price_exec), quantity=DEFAULT_QUANTITY)
-                trade_res_brl = trade_net_pnl_brl(trade, _COST_MODEL)
-                trades.append({
-                    'entry_time': entry_ts,
-                    'exit_time': ts,
-                    'entry_price': entry_price,
-                    'exit_price': exit_price_exec,
-                    'position': 1,
-                    'points': pts,
-                    'pnl_brl': trade_res_brl,
-                    'costs_brl': trade_costs_brl(trade, _COST_MODEL),
-                })
-                current_capital += trade_res_brl
-                position = 0
-        
-        equity[i] = current_capital
-
-    return df, trades, equity
+    return df, trades_rows, equity
 
 def calculate_metrics(trades, equity_curve):
     if not trades:
@@ -269,19 +128,17 @@ def generate_flyer(df, trades, equity, metrics, filename="flyer_r9.png"):
     ax1.plot(df.index, df['close'], color='gray', alpha=0.5, linewidth=1, label='WIN Index')
     ax1.set_ylabel('Index Points', color='gray', fontweight='bold')
     
-    # Buy/Sell/Win/Loss Markers
-    # Since this is a "flyer" showing robot performance, let's mark the exits
-    # Green Circle = Win, Red Circle = Loss
     if not df_trades.empty:
         wins = df_trades[df_trades['pnl_brl'] > 0]
         losses = df_trades[df_trades['pnl_brl'] <= 0]
-        
-        # Plotting at Exit Time/Price
-        ax1.scatter(wins['exit_time'], wins['exit_price'], color='green', marker='o', s=80, edgecolors='black', zorder=5, label='Win')
-        ax1.scatter(losses['exit_time'], losses['exit_price'], color='red', marker='o', s=80, edgecolors='black', zorder=5, label='Loss')
+        ax1.scatter(wins['exit_time'], wins['exit_price'], color='green', marker='o', s=60, edgecolors='black', zorder=5, label='Win')
+        ax1.scatter(losses['exit_time'], losses['exit_price'], color='red', marker='o', s=60, edgecolors='black', zorder=5, label='Loss')
 
-    # Equity Curve
-    ax2.plot(df.index, equity, color='blue', linewidth=2.5, label='Robot Equity (R$)')
+    if not df_trades.empty:
+        equity_times = [df.index[0]] + list(df_trades["exit_time"])
+    else:
+        equity_times = [df.index[0]]
+    ax2.step(equity_times, equity, where='post', color='blue', linewidth=2.2, label='Robot Equity (R$)')
     ax2.set_ylabel('Equity (R$)', color='blue', fontweight='bold', fontsize=12)
     
     # Styling
@@ -298,9 +155,9 @@ def generate_flyer(df, trades, equity, metrics, filename="flyer_r9.png"):
     eq_series = pd.Series(equity)
     rolling_max = eq_series.cummax()
     drawdown = (eq_series - rolling_max) / rolling_max * 100
-    
-    ax3.fill_between(df.index, drawdown, 0, color='red', alpha=0.3, label='Drawdown %')
-    ax3.plot(df.index, drawdown, color='red', linewidth=1)
+
+    ax3.fill_between(equity_times, drawdown, 0, color='red', alpha=0.3, label='Drawdown %')
+    ax3.plot(equity_times, drawdown, color='red', linewidth=1)
     ax3.set_ylabel('Drawdown %')
     ax3.grid(True, alpha=0.3)
     ax3.legend(loc='lower left')
@@ -322,7 +179,7 @@ def generate_flyer(df, trades, equity, metrics, filename="flyer_r9.png"):
     else:
         stats_text = "No trades executed."
 
-    # Add CDI Comparison (Approx)
+    # Add CDI comparison using the backtest window in BRT.
     days = (df.index[-1] - df.index[0]).days
     cdi_return = (1 + CDI_ANNUAL)**(days/365) - 1
     stats_text += f"\nBenchmark CDI ({days} days): {cdi_return*100:.2f}%"

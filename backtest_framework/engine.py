@@ -90,7 +90,7 @@ class BacktestEngine:
     def _execute_order(self, tick: Tick, side: Side, quantity: int) -> Fill:
         fill_price = self.slippage_model.apply(tick.price, side)
         gross_value = fill_price * quantity
-        costs = self.cost_model.calculate(gross_value)
+        costs = self.cost_model.calculate(gross_value, quantity=quantity)
         return Fill(
             timestamp=tick.timestamp,
             side=side,
