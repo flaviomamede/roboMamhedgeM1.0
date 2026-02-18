@@ -31,6 +31,7 @@ def run_backtest_trades(
     use_macd=True,
     min_atr=1e-9,
     max_bars_in_trade=12,
+    with_timestamps: bool = False,
 ):
     """Retorna trades com entry/exit (pontos) para custos realistas."""
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
@@ -58,7 +59,9 @@ def run_backtest_trades(
     highest_since_entry = 0.0
     bars_in_trade = 0
     entry_day = None
+    entry_ts = None
     trades: list[TradePoints] = []
+    trades_ts: list[dict] = []
 
     for i in range(2, len(df)):
         ts = df.index[i]
@@ -74,21 +77,30 @@ def run_backtest_trades(
             # 0) Saída Operacional (Mandatória 17:00 ou fim de sessão)
             if ts.date() != entry_day or not dentro_horario_operacao(ts):
                 exit_price = float(row['close'])
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
             # 1) Checa STOP VIGENTE (Anti-bias: Low do candle vs Stop calculado no candle anterior)
             if row['low'] <= stop_loss:
                 exit_price = float(stop_loss)
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
             # 2) Saída por Regime ou Time-stop
             if (not regime_up) or (bars_in_trade >= max_bars_in_trade):
                 exit_price = float(row['close'])
-                trades.append(TradePoints(float(entry_price), exit_price, quantity))
+                t = TradePoints(float(entry_price), exit_price, quantity)
+                trades.append(t)
+                if with_timestamps and entry_ts is not None:
+                    trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": ts})
                 position = 0
                 continue
 
@@ -127,13 +139,17 @@ def run_backtest_trades(
         stop_loss = float(entry_price - stop_atr * atr_val)
         bars_in_trade = 0
         entry_day = ts.date()
+        entry_ts = ts
         position = 1
 
     if position == 1:
         exit_price = float(df['close'].iloc[-1])
-        trades.append(TradePoints(float(entry_price), exit_price, quantity))
+        t = TradePoints(float(entry_price), exit_price, quantity)
+        trades.append(t)
+        if with_timestamps and entry_ts is not None:
+            trades_ts.append({"trade": t, "entry_time": entry_ts, "exit_time": df.index[-1]})
 
-    return trades
+    return trades_ts if with_timestamps else trades
 
 
 def run_backtest(
