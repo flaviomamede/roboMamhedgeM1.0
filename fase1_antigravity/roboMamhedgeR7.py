@@ -24,10 +24,10 @@ DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
 
 def run_backtest(
     csv_path=DEFAULT_CSV_PATH,
-    stop_atr=1.5,
-    target_atr=2.5,
-    rsi_bullish=40,
-    use_macd_filter=True,
+    stop_atr=2.3,
+    target_atr=4.0,
+    rsi_bullish=45,
+    use_macd_filter=False,
 ):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if isinstance(df.columns, pd.MultiIndex):

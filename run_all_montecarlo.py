@@ -1,5 +1,5 @@
 """
-Executa cada robô (R1-R8 + Contrário) e Monte Carlo com métricas.
+Executa cada robô (R1-R10 + Contrário) e Monte Carlo com métricas.
 P&L dos robôs é em pontos puros; conversão para R$ via pnl_reais().
 """
 from __future__ import annotations
@@ -55,10 +55,10 @@ ROBOTS = [
     ("R6orig", r6_orig.run_backtest, "R6 Original (Flavio): Peak RSI puro"),
     ("R6v2", run_r6v2, "R6 v2 (Cursor): +MACD +Stop +TP"),
     ("R6", run_r6, "R6 (config): +BB +Stop 2×ATR"),
-    ("R7", lambda: run_r7(stop_atr=2.0, target_atr=3.0, rsi_bullish=40, use_macd_filter=False), "R6+TP (s2 t3 r40)"),
+    ("R7", run_r7, "R7 defaults (otimizados)"),
     ("R8", run_r8, "R2+R6 (EMA50+Momentum+Peak)"),
-    ("R9", lambda: run_r9(ema_fast=6, rsi_thresh=40, rsi_window=3, stop_atr=1.5, target_atr=0, use_macd=True, use_adx=True), "R9 ref: EMA6+RSI+MACD+ADX"),
-    ("R10", lambda: run_r10(ema_fast=6, ema_slow=21, rsi_thresh=40, rsi_window=4, stop_atr=1.7, trail_atr=2.4, breakeven_trigger_atr=1.5, use_macd=True, use_adx=True), "R10 regime+trail+breakeven"),
+    ("R9", run_r9, "R9 defaults (otimizados)"),
+    ("R10", run_r10, "R10 defaults (otimizados)"),
     ("Contrário", run_contrario, "Inverso R6, stop 0.8 / target 3"),
 ]
 
@@ -89,7 +89,7 @@ def monte_carlo(p_win, avg_gain_r, avg_loss_r):
 
 def main():
     print("=" * 70)
-    print(f"ROBÔS R1-R8 + MONTE CARLO ({N_COTAS} contratos, custo R$ {CUSTO_REAIS:.2f}/trade)")
+    print(f"ROBÔS R1-R10 + MONTE CARLO ({N_COTAS} contratos, custo R$ {CUSTO_REAIS:.2f}/trade)")
     print("=" * 70)
 
     results = []

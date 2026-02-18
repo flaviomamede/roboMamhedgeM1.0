@@ -71,6 +71,7 @@ def metrics(trades_pts):
             "max_dd": 0.0,
             "payoff": 0.0,
             "risk_factor": float("inf"),
+            "kelly_mu_sigma2": 0.0,
             "roi_total_pct": 0.0,
             "roi_mensal_pct": 0.0,
         }
@@ -84,6 +85,9 @@ def metrics(trades_pts):
 
     std = float(trades_r.std(ddof=1)) if n > 1 else 0.0
     sharpe = float((e_pl / std * np.sqrt(252)) if std > 0 else 0.0)
+    var_trades = float(trades_r.var(ddof=1)) if n > 1 else 0.0
+    # Critério de Kelly simplificado da função-objetivo: mu / sigma^2
+    kelly_mu_sigma2 = float(e_pl / (var_trades + 1e-9)) if var_trades > 0 else 0.0
 
     cum = np.cumsum(trades_r)
     peak = np.maximum.accumulate(cum)
@@ -106,6 +110,7 @@ def metrics(trades_pts):
         "max_dd": max_dd,
         "payoff": payoff,
         "risk_factor": risk_factor,
+        "kelly_mu_sigma2": kelly_mu_sigma2,
         "roi_total_pct": 0.0,
         "roi_mensal_pct": 0.0,
     }

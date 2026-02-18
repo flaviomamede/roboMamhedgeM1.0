@@ -18,10 +18,10 @@ DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "WIN_5min.csv"
 
 def run_backtest(
     csv_path=DEFAULT_CSV_PATH,
-    stop_atr=1.5,
-    target_atr=2.5,
-    rsi_thresh=40,
-    rsi_window=5,
+    stop_atr=2.0,
+    target_atr=3.5,
+    rsi_thresh=55,
+    rsi_window=2,
     use_macd_filter=True,
 ):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)

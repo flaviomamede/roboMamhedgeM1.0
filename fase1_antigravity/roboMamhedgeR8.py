@@ -22,9 +22,9 @@ def run_backtest(
     csv_path=DEFAULT_CSV_PATH,
     ema_fast=9,
     ema_slow=21,
-    ema_trend=50,
-    momentum_lookback=10,
-    stop_atr=2.0,
+    ema_trend=100,
+    momentum_lookback=30,
+    stop_atr=1.5,
     rsi_period=14,
 ):
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)

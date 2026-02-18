@@ -15,10 +15,10 @@ DEFAULT_CSV_PATH = BASE_DIR / "WIN_5min.csv"
 
 def run_backtest(
     csv_path: str | Path = DEFAULT_CSV_PATH,
-    ema_fast: int = 9,
-    ema_slow: int = 21,
-    atr_period: int = 14,
-    atr_mean_period: int = 20,
+    ema_fast: int = 11,
+    ema_slow: int = 18,
+    atr_period: int = 10,
+    atr_mean_period: int = 7,
 ) -> np.ndarray:
     """R0: protótipo de sinal (EMA9/21 + filtro de ATR).
 
