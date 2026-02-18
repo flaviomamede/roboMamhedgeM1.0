@@ -24,18 +24,21 @@ DEFAULT_QUANTITY = 1
 _COST_MODEL = default_b3_cost_model()
 
 DEFAULT_CSV_PATH = os.path.join(REPO_ROOT, "fase1_antigravity", "WIN_5min.csv")
+DEFAULT_OUTPUT_DIR = os.path.join(REPO_ROOT, "reports", "phase2")
+DEFAULT_OUTPUT_FILE = os.path.join(DEFAULT_OUTPUT_DIR, "flyer_r9.png")
 
 def run_detailed_backtest(
     csv_path=DEFAULT_CSV_PATH,
+    # Defaults alinhados ao R9 otimizado atual
     ema_fast=4,
-    rsi_period=14,
-    rsi_thresh=40,
-    rsi_window=5,
-    stop_atr=2.0,
-    target_atr=0,       # 0 = no target
-    use_macd=False,
+    rsi_period=7,
+    rsi_thresh=45,
+    rsi_window=9,
+    stop_atr=2.4,
+    target_atr=2.0,
+    use_macd=True,
     use_adx=True,
-    adx_min=20,
+    adx_min=30,
 ):
     print(f"Carregando dados de {csv_path}...")
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
@@ -352,5 +355,6 @@ if __name__ == "__main__":
             print(f"{k}: {v}")
             
         # Generate Chart
-        output_file = os.path.join(current_dir, "fase1_antigravity", "flyer_r9.png")
+        os.makedirs(DEFAULT_OUTPUT_DIR, exist_ok=True)
+        output_file = DEFAULT_OUTPUT_FILE
         generate_flyer(df, trades, equity, metrics, filename=output_file)
