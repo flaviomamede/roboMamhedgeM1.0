@@ -15,7 +15,6 @@ if str(REPO_ROOT) not in sys.path:
 from roboMamhedgeR6 import run_backtest_trades as run_r6_trades
 from roboMamhedgeR9 import run_backtest_trades as run_r9_trades
 from roboMamhedgeR10 import run_backtest_trades as run_r10_trades
-from roboMamhedgeR10v2 import run_backtest_trades as run_r10v2_trades
 from roboMamhedgeR11 import run_backtest_trades as run_r11_trades
 from b3_costs_phase2 import default_b3_cost_model, trade_net_pnl_brl
 
@@ -112,7 +111,7 @@ def _plot_mc_distributions(mc_data: dict[str, np.ndarray], output_path: str) -> 
         ax.grid(alpha=0.2)
         ax.legend(fontsize=8)
     axes[0].set_ylabel("Frequência")
-    fig.suptitle("Monte Carlo 1000 sims — Retornos acumulados (R6, R9, R10, R10v2, R11)", fontsize=11)
+    fig.suptitle("Monte Carlo 1000 sims — Retornos acumulados (R6, R9, R10, R11)", fontsize=11)
     plt.tight_layout()
     plt.savefig(output_path, dpi=120)
     plt.close(fig)
@@ -127,7 +126,6 @@ def run_comparison() -> pd.DataFrame:
         "R6": run_r6_trades(),
         "R9": run_r9_trades(),
         "R10": run_r10_trades(),
-        "R10v2": run_r10v2_trades(),
         "R11": run_r11_trades(),
     }
 
@@ -164,7 +162,7 @@ def run_comparison() -> pd.DataFrame:
 def main() -> None:
     df_cmp = run_comparison()
     with pd.option_context("display.max_columns", None, "display.width", 220):
-        print("\n=== Comparativo R6 / R9 / R10 / R10v2 / R11 ===")
+        print("\n=== Comparativo R6 / R9 / R10 / R11 ===")
         print(df_cmp.to_string(index=False, float_format=lambda x: f"{x:,.4f}"))
     print(f"\nGráfico salvo em: {DEFAULT_REPORT_IMG}")
 

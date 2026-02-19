@@ -1,5 +1,5 @@
 """
-Flyer de desempenho do R11 (Omni-Regime: Trend-Following + Mean Reversion via ER).
+Flyer de desempenho do R11 (ex-R10v2: Trend + ER + VWAP opcional).
 Consome roboMamhedgeR11.run_backtest_trades() diretamente com with_timestamps=True.
 Saída: reports/phase2/flyer_r11.png
 """
@@ -111,9 +111,9 @@ def generate_flyer(df, trades, equity, metrics, filename=DEFAULT_OUTPUT_FILE):
     else:
         equity_times = [df.index[0]]
 
-    ax2.step(equity_times, equity, where="post", color="purple", linewidth=2.2, label="Equity (R$)")
+    ax2.step(equity_times, equity, where="post", color="blue", linewidth=2.2, label="Equity (R$)")
     ax1.set_title(
-        f"Robot R11 — Omni-Regime (Trend + Mean Reversion) | {df.index[0].date()} → {df.index[-1].date()}",
+        f"Robot R11 (ex-R10v2) — Trend + ER + VWAP | {df.index[0].date()} → {df.index[-1].date()}",
         fontsize=16, fontweight="bold",
     )
     ax1.grid(alpha=0.3)

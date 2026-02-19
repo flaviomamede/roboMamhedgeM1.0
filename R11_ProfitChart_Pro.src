@@ -1,0 +1,269 @@
+// ==========================================================
+// R10v2_ProfitChart_Pro.src  (NTSL - Profit Pro)
+// Conversao do robo R10v2 (agora renomeado internamente para R11 no projeto Python)
+// Estrategia bidirecional (long + short) para WIN em M5
+//
+// Regras:
+// - Filtro de regime por ER (Efficiency Ratio)
+// - Tendencia por EMA fast/slow + inclinacao da EMA fast
+// - Janela RSI bullish/bearish
+// - ADX/MACD/VWAP opcionais
+// - Stop inicial ATR + break-even ATR + trailing ATR
+// - Time-stop por numero maximo de barras em trade
+// - Fechamento operacional fora da janela intraday
+// ==========================================================
+
+input
+  HorarioInicio(1045);               // 10:45 BRT
+  HorarioFim(1630);                  // 16:30 BRT (exclusive)
+
+  EmaFast(6);
+  EmaSlow(34);
+  RsiPeriod(10);
+  RsiThresh(55.0);
+  RsiWindow(4);
+
+  ERPeriod(14);
+  ERTrendMin(0.40);
+
+  StopATR(1.4);
+  TrailATR(1.8);
+  BreakevenTriggerATR(2.2);
+
+  UseADX(true);
+  ADXMin(20.0);
+  UseMACD(false);
+  UseVWAPFilter(false);
+
+  EnableLong(true);
+  EnableShort(true);
+
+  MinATR(0.000000001);
+  MaxBarsInTrade(12);
+  ATRModo(1);                        // 0 aritmetico, 1 exponencial
+
+var
+  emaFastVal, emaSlowVal : float;
+  rsiVal, atrVal, adxVal : float;
+  macdLine, macdSignal, macdHist : float;
+  erNumer, erDenom, erVal : float;
+  trailingStop : float;
+
+  // VWAP intradiario calculado no proprio codigo
+  cumPV, cumVol, vwapVal, typicalPrice : float;
+
+  // Sinais/filtros
+  sessaoOk, regimeOk : boolean;
+  emaUp, emaDown : boolean;
+  condAdx, condMacdLong, condMacdShort : boolean;
+  condVwapLong, condVwapShort : boolean;
+  longSignal, shortSignal : boolean;
+
+  // Janela RSI
+  rsiBullCount, rsiBearCount : integer;
+
+  // Estado de trade
+  barsInTrade, entryDate : integer;
+  stopLoss : float;
+  highSinceEntry, lowSinceEntry : float;
+  wasBought, wasSold : boolean;
+
+  k : integer;
+
+begin
+  if (CurrentBar = 1) then
+  begin
+    rsiBullCount := 0;
+    rsiBearCount := 0;
+    barsInTrade := 0;
+    entryDate := Date;
+    stopLoss := 0.0;
+    highSinceEntry := 0.0;
+    lowSinceEntry := 0.0;
+    wasBought := false;
+    wasSold := false;
+    cumPV := 0.0;
+    cumVol := 0.0;
+  end;
+
+  // --------------------------
+  // Indicadores base
+  // --------------------------
+  emaFastVal := MediaExp(EmaFast, Fechamento);
+  emaSlowVal := MediaExp(EmaSlow, Fechamento);
+  rsiVal := RSI(RsiPeriod, 0);
+  atrVal := AvgTrueRange(14, ATRModo);
+  adxVal := ADX(14, 14);
+
+  macdLine := MediaExp(12, Fechamento) - MediaExp(26, Fechamento);
+  macdSignal := MediaExp(9, macdLine);
+  macdHist := macdLine - macdSignal;
+
+  // ER (Kaufman) = |Close - Close[n]| / soma |Close[i]-Close[i+1]|
+  erNumer := Abs(Fechamento - Fechamento[ERPeriod]);
+  erDenom := 0.0;
+  for k := 0 to ERPeriod - 1 do
+  begin
+    erDenom := erDenom + Abs(Fechamento[k] - Fechamento[k + 1]);
+  end;
+  if (erDenom > 0.0) then
+    erVal := erNumer / erDenom
+  else
+    erVal := 0.0;
+
+  // VWAP intradiario
+  if (Date <> Date[1]) then
+  begin
+    cumPV := 0.0;
+    cumVol := 0.0;
+  end;
+  typicalPrice := (High + Low + Fechamento) / 3.0;
+  cumPV := cumPV + (typicalPrice * Volume);
+  cumVol := cumVol + Volume;
+  if (cumVol > 0) then
+    vwapVal := cumPV / cumVol
+  else
+    vwapVal := Fechamento;
+
+  // Janela RSI bullish / bearish
+  if (rsiVal > RsiThresh) then
+    rsiBullCount := RsiWindow
+  else if (rsiBullCount > 0) then
+    rsiBullCount := rsiBullCount - 1;
+
+  if (rsiVal < (100.0 - RsiThresh)) then
+    rsiBearCount := RsiWindow
+  else if (rsiBearCount > 0) then
+    rsiBearCount := rsiBearCount - 1;
+
+  // Filtros comuns
+  sessaoOk := (Time >= HorarioInicio) and (Time < HorarioFim);
+  regimeOk := (erVal >= ERTrendMin);
+  emaUp := (emaFastVal > emaFastVal[1]);
+  emaDown := (emaFastVal < emaFastVal[1]);
+
+  condAdx := (not UseADX) or (adxVal >= ADXMin);
+  condMacdLong := (not UseMACD) or (macdHist > 0);
+  condMacdShort := (not UseMACD) or (macdHist < 0);
+  condVwapLong := (not UseVWAPFilter) or (Fechamento >= vwapVal);
+  condVwapShort := (not UseVWAPFilter) or (Fechamento <= vwapVal);
+
+  longSignal :=
+    EnableLong and sessaoOk and regimeOk and
+    (emaFastVal > emaSlowVal) and emaUp and
+    (rsiBullCount > 0) and condAdx and condMacdLong and condVwapLong and
+    (atrVal > MinATR);
+
+  shortSignal :=
+    EnableShort and sessaoOk and regimeOk and
+    (emaFastVal < emaSlowVal) and emaDown and
+    (rsiBearCount > 0) and condAdx and condMacdShort and condVwapShort and
+    (atrVal > MinATR);
+
+  // --------------------------
+  // Detecta nova entrada e inicializa estado
+  // --------------------------
+  if (IsBought) and (not wasBought) then
+  begin
+    barsInTrade := 0;
+    entryDate := Date;
+    highSinceEntry := BuyPrice;
+    lowSinceEntry := BuyPrice;
+    stopLoss := BuyPrice - (StopATR * atrVal);
+  end;
+
+  if (IsSold) and (not wasSold) then
+  begin
+    barsInTrade := 0;
+    entryDate := Date;
+    highSinceEntry := SellPrice;
+    lowSinceEntry := SellPrice;
+    stopLoss := SellPrice + (StopATR * atrVal);
+  end;
+
+  // --------------------------
+  // Gestao posicao comprada
+  // --------------------------
+  if (IsBought) then
+  begin
+    barsInTrade := barsInTrade + 1;
+
+    if (Date <> entryDate) or (not sessaoOk) then
+      SellToCoverAtMarket
+    else if (Low <= stopLoss) then
+      SellToCoverAtMarket
+    else if ((emaFastVal < emaSlowVal) or (barsInTrade >= MaxBarsInTrade)) then
+      SellToCoverAtMarket
+    else
+    begin
+      if (High > highSinceEntry) then
+        highSinceEntry := High;
+
+      if ((highSinceEntry - BuyPrice) >= (BreakevenTriggerATR * atrVal)) then
+      begin
+        if (stopLoss < BuyPrice) then
+          stopLoss := BuyPrice;
+      end;
+
+      trailingStop := highSinceEntry - (TrailATR * atrVal);
+      if (trailingStop > stopLoss) then
+        stopLoss := trailingStop;
+
+      SellToCoverStop(stopLoss, stopLoss);
+    end;
+  end
+  // --------------------------
+  // Gestao posicao vendida
+  // --------------------------
+  else if (IsSold) then
+  begin
+    barsInTrade := barsInTrade + 1;
+
+    if (Date <> entryDate) or (not sessaoOk) then
+      BuyToCoverAtMarket
+    else if (High >= stopLoss) then
+      BuyToCoverAtMarket
+    else if ((emaFastVal > emaSlowVal) or (barsInTrade >= MaxBarsInTrade)) then
+      BuyToCoverAtMarket
+    else
+    begin
+      if (Low < lowSinceEntry) then
+        lowSinceEntry := Low;
+
+      if ((SellPrice - lowSinceEntry) >= (BreakevenTriggerATR * atrVal)) then
+      begin
+        if (stopLoss > SellPrice) then
+          stopLoss := SellPrice;
+      end;
+
+      trailingStop := lowSinceEntry + (TrailATR * atrVal);
+      if (trailingStop < stopLoss) then
+        stopLoss := trailingStop;
+
+      BuyToCoverStop(stopLoss, stopLoss);
+    end;
+  end
+  // --------------------------
+  // Entrada quando flat
+  // --------------------------
+  else
+  begin
+    if longSignal then
+      BuyAtMarket
+    else if shortSignal then
+      SellShortAtMarket;
+  end;
+
+  // Estado para detectar transicao no proximo candle
+  wasBought := IsBought;
+  wasSold := IsSold;
+
+  // Plots de apoio (opcionais)
+  Plot(emaFastVal);
+  Plot2(emaSlowVal);
+  if (IsBought or IsSold) then
+    Plot3(stopLoss)
+  else
+    Plot3(0);
+end;
+

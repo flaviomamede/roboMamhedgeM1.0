@@ -1,0 +1,179 @@
+// ==========================================================
+// R10_ProfitChart_Pro.src
+// Conversao do roboMamhedgeR10.py para ProfitChart Pro (NTSL)
+// Estrategia long-only para WIN em M5
+//
+// Regras principais (fiéis ao R10):
+// - Entrada: regime de alta (EMA fast > EMA slow), EMA fast subindo,
+//            janela RSI bullish, filtro ADX (opcional), filtro MACD (opcional)
+// - Saidas: operacional (fora da janela/virada de dia), stop ATR,
+//           perda de regime, time-stop
+// - Gestao: trailing ATR + break-even por ATR
+//
+// Observacao importante:
+// - A quantidade de contratos normalmente eh configurada na Automacao do Profit.
+// ==========================================================
+
+input
+  HorarioInicio(1045);          // 10:45 BRT
+  HorarioFim(1630);             // 16:30 BRT (exclusive)
+
+  EmaFast(10);
+  EmaSlow(34);
+  RsiPeriod(14);
+  RsiThresh(50.0);
+  RsiWindow(3);
+
+  StopATR(2.0);
+  TrailATR(2.2);
+  BreakevenTriggerATR(2.2);
+
+  UseADX(true);
+  ADXMin(20.0);
+  UseMACD(true);
+  MinATR(0.000000001);
+  MaxBarsInTrade(12);
+
+  // AvgTrueRange(periodo, modo): 0 aritmetico, 1 exponencial
+  // R10 original usa ATR tipo Wilder/EMA (aprox. modo 1).
+  ATRModo(1);
+
+var
+  emaFastVal, emaSlowVal : float;
+  rsiVal, atrVal, adxVal : float;
+  macdLine, macdSignal, macdHist : float;
+  trailingStop : float;
+
+  regimeUp, emaUp : boolean;
+  sessaoOk, condRsi, condAdx, condMacd : boolean;
+
+  rsiBullCount : integer;
+  barsInTrade : integer;
+  entryDate : integer;
+
+  stopLoss : float;
+  highestSinceEntry : float;
+  estavaComprado : boolean;
+
+begin
+  // Inicializacao basica
+  if (CurrentBar = 1) then
+  begin
+    rsiBullCount := 0;
+    barsInTrade := 0;
+    entryDate := Date;
+    stopLoss := 0.0;
+    highestSinceEntry := 0.0;
+    estavaComprado := false;
+  end;
+
+  // Indicadores (barra atual)
+  emaFastVal := MediaExp(EmaFast, Fechamento);
+  emaSlowVal := MediaExp(EmaSlow, Fechamento);
+  rsiVal := RSI(RsiPeriod, 0);
+  atrVal := AvgTrueRange(14, ATRModo);
+  adxVal := ADX(14, 14);
+
+  // MACD histograma via medias para evitar dependencia de buffer |x|
+  macdLine := MediaExp(12, Fechamento) - MediaExp(26, Fechamento);
+  macdSignal := MediaExp(9, macdLine);
+  macdHist := macdLine - macdSignal;
+
+  // Janela RSI bullish: equivalente a rolling max de (RSI > thresh)
+  if (rsiVal > RsiThresh) then
+    rsiBullCount := RsiWindow
+  else if (rsiBullCount > 0) then
+    rsiBullCount := rsiBullCount - 1;
+
+  condRsi := (rsiBullCount > 0);
+
+  // Filtros de regime/sessao
+  regimeUp := (emaFastVal > emaSlowVal);
+  emaUp := (emaFastVal > emaFastVal[1]);
+  sessaoOk := (Time >= HorarioInicio) and (Time < HorarioFim);
+
+  // Estrategia eh long-only. Se houver short aberto por qualquer motivo, fecha.
+  if (IsSold) then
+  begin
+    BuyToCoverAtMarket;
+  end;
+
+  // Detecta abertura de nova posicao comprada e inicializa estado.
+  if (IsBought) and (not estavaComprado) then
+  begin
+    barsInTrade := 0;
+    highestSinceEntry := BuyPrice;
+    stopLoss := BuyPrice - (StopATR * atrVal);
+    entryDate := Date;
+  end;
+
+  // --------------------------
+  // Gestao da posicao comprada
+  // --------------------------
+  if (IsBought) then
+  begin
+    barsInTrade := barsInTrade + 1;
+
+    // 0) Saida operacional (fim de janela ou virada de dia)
+    if (Date <> entryDate) or (not sessaoOk) then
+    begin
+      SellToCoverAtMarket;
+    end
+    // 1) Stop vigente (anti-bias: compara low da barra com stop anterior)
+    else if (Low <= stopLoss) then
+    begin
+      SellToCoverAtMarket;
+    end
+    // 2) Saida por regime ou time-stop
+    else if ((not regimeUp) or (barsInTrade >= MaxBarsInTrade)) then
+    begin
+      SellToCoverAtMarket;
+    end
+    else
+    begin
+      // 3) Atualiza watermark/trailing para vigorar nas barras seguintes
+      if (High > highestSinceEntry) then
+        highestSinceEntry := High;
+
+      // Break-even
+      if ((highestSinceEntry - BuyPrice) >= (BreakevenTriggerATR * atrVal)) then
+      begin
+        if (stopLoss < BuyPrice) then
+          stopLoss := BuyPrice;
+      end;
+
+      // Trailing ATR
+      trailingStop := highestSinceEntry - (TrailATR * atrVal);
+      if (trailingStop > stopLoss) then
+        stopLoss := trailingStop;
+
+      // Publica stop na automacao (ordem stop de protecao)
+      SellToCoverStop(stopLoss, stopLoss);
+    end;
+  end
+  else
+  begin
+    // --------------------------
+    // Logica de entrada (long)
+    // --------------------------
+    condAdx := (not UseADX) or (adxVal >= ADXMin);
+    condMacd := (not UseMACD) or (macdHist > 0);
+
+    if sessaoOk and regimeUp and emaUp and condRsi and condAdx and condMacd and (atrVal > MinATR) then
+    begin
+      BuyAtMarket;
+    end;
+  end;
+
+  // Estado para detectar transicao de posicao no proximo candle
+  estavaComprado := IsBought;
+
+  // Plots de apoio (opcionais)
+  Plot(emaFastVal);
+  Plot2(emaSlowVal);
+  if (IsBought) then
+    Plot3(stopLoss)
+  else
+    Plot3(0);
+end;
+
